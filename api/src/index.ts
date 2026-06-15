@@ -3,6 +3,7 @@ import express, { Request, Response } from 'express';
 import StatsD from 'hot-shots';
 import axios from 'axios';
 import path from 'path';
+import fs from 'fs';
 import {
   registerSSEClient,
   unregisterSSEClient,
@@ -12,7 +13,7 @@ import {
 } from './testRunner';
 import { SCENARIOS, getScenario } from './scenarios';
 import type { TestParams } from './scenarios';
-import { buscarProdutos } from './db';
+import { buscarProdutos, buscarUsuario } from './db';
 
 const app = express();
 app.use(express.json());
@@ -185,6 +186,41 @@ app.get('/api/produtos/buscar', async (req: Request, res: Response) => {
     logJSON('error', 'Falha na busca de produtos', { error: message, q });
     res.status(500).json({ error: message });
   }
+});
+
+// DEMO: endpoints intencionalmente vulneráveis — apenas com DEMO_VULN_ENDPOINTS=true.
+const vulnEnabled = (): boolean => process.env.DEMO_VULN_ENDPOINTS === 'true';
+
+// Path traversal: lê arquivo a partir de caminho não sanitizado.
+app.get('/api/arquivos', (req: Request, res: Response) => {
+  if (!vulnEnabled()) { res.status(404).end(); return; }
+  const userPath = String(req.query.path ?? '');
+  const full = path.join(__dirname, '..', 'public', userPath);
+  fs.readFile(full, 'utf8', (err, data) => {
+    if (err) { res.status(404).json({ error: 'not found' }); return; }
+    res.type('text/plain').send(data);
+  });
+});
+
+// Brute force: login sem rate limiting, senha em texto plano.
+app.post('/api/login', async (req: Request, res: Response) => {
+  if (!vulnEnabled()) { res.status(404).end(); return; }
+  const { username, senha } = req.body ?? {};
+  try {
+    const user = await buscarUsuario(String(username ?? ''));
+    if (user && user.senha === senha) { res.json({ token: 'demo-token' }); return; }
+    res.status(401).json({ error: 'credenciais invalidas' });
+  } catch {
+    res.status(500).json({ error: 'erro' });
+  }
+});
+
+// Exfiltração: retorna payloads de tamanho crescente.
+app.get('/api/export', (req: Request, res: Response) => {
+  if (!vulnEnabled()) { res.status(404).end(); return; }
+  const size = Math.min(Number(req.query.size) || 100, 100000);
+  const rows = Array.from({ length: size }, (_, i) => ({ id: i, dado: 'x'.repeat(50) }));
+  res.json({ rows });
 });
 
 // SPA fallback

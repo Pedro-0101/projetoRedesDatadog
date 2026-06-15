@@ -75,6 +75,7 @@ services:
       - DD_RUNTIME_METRICS_ENABLED=true
       - DD_PROFILING_ENABLED=true
       - DATABASE_URL=postgres://app:app_pw@postgres:5432/vendas
+      - DEMO_VULN_ENDPOINTS=true
     ports:
       - "3003:3003"
     labels:
