@@ -1,6 +1,7 @@
 import axios from 'axios';
 import StatsD from 'hot-shots';
 import tracer from './tracer';
+import { inserirVenda } from './db';
 import { TestParams, TestState, getScenario } from './scenarios';
 import type { Response } from 'express';
 
@@ -169,6 +170,8 @@ async function runBatch(state: TestState, signal: AbortSignal): Promise<void> {
         if (success) {
           state.success++;
           statsd.increment('teste.sucessos', 1, [`scenario:${state.scenarioId}`, 'env:dev']);
+          // Gera tráfego de banco correlacionado ao trace (span postgres.query).
+          inserirVenda('produto-teste', 100, `cliente-${index}`).catch(() => {});
         } else {
           state.errors++;
           statsd.increment('teste.erros', 1, [`scenario:${state.scenarioId}`, 'env:dev']);
