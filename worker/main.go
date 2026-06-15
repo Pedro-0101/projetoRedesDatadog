@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	httptrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/net/http"
@@ -35,6 +36,30 @@ func logJSON(level, message string, span tracer.Span) {
 	fmt.Fprintln(os.Stdout, string(b))
 }
 
+func parseFloatHeader(r *http.Request, header string, fallback float64) float64 {
+	val := r.Header.Get(header)
+	if val == "" {
+		return fallback
+	}
+	f, err := strconv.ParseFloat(val, 64)
+	if err != nil || f < 0 || f > 1 {
+		return fallback
+	}
+	return f
+}
+
+func parseIntHeader(r *http.Request, header string, fallback int) int {
+	val := r.Header.Get(header)
+	if val == "" {
+		return fallback
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil || i < 0 {
+		return fallback
+	}
+	return i
+}
+
 func processarHandler(w http.ResponseWriter, r *http.Request) {
 	parentSpan, _ := tracer.SpanFromContext(r.Context())
 
@@ -43,10 +68,18 @@ func processarHandler(w http.ResponseWriter, r *http.Request) {
 
 	logJSON("info", "Iniciando processamento", processingSpan)
 
-	delay := time.Duration(100+rand.Intn(1900)) * time.Millisecond
+	errorRate := parseFloatHeader(r, "X-Error-Rate", 0.20)
+	minDelay := parseIntHeader(r, "X-Min-Delay", 100)
+	maxDelay := parseIntHeader(r, "X-Max-Delay", 1900)
+
+	delayRange := maxDelay - minDelay
+	if delayRange <= 0 {
+		delayRange = 1
+	}
+	delay := time.Duration(minDelay+rand.Intn(delayRange)) * time.Millisecond
 	time.Sleep(delay)
 
-	if rand.Float64() < 0.20 {
+	if rand.Float64() < errorRate {
 		processingSpan.SetTag(ext.Error, true)
 		processingSpan.SetTag(ext.ErrorMsg, "falha simulada no processamento")
 		logJSON("error", "Erro simulado no processamento", processingSpan)

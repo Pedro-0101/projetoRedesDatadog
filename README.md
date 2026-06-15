@@ -23,7 +23,7 @@ Usuario
   v
 +----------------+          HTTP          +-------------------+
 |   API (Node)   |  -------------------> |   Worker (Go)     |
-|   porta 3000   |                       |   porta 8080      |
+|   porta 3003   |                       |   porta 8080      |
 +----------------+                       +-------------------+
        |                                         |
        | traces + logs                           | traces + logs
@@ -173,7 +173,7 @@ cp .env.example .env
 docker-compose up --build
 
 # 3. Envie requisicoes de teste
-curl -X POST http://localhost:3000/comprar \
+curl -X POST http://localhost:3003/comprar \
   -H "Content-Type: application/json" \
   -d '{"produto": "notebook", "quantidade": 1}'
 
