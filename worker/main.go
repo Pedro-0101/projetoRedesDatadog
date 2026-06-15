@@ -14,6 +14,7 @@ import (
 	httptrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/net/http"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
 )
 
 type logEntry struct {
@@ -138,6 +139,19 @@ func processarHandler(w http.ResponseWriter, r *http.Request) {
 		delayRange = 1
 	}
 	delay := time.Duration(minDelay+rand.Intn(delayRange)) * time.Millisecond
+
+	if cpuMs := parseIntHeader(r, "X-Cpu-Burn-Ms", 0); cpuMs > 0 {
+		burnCPU(time.Duration(cpuMs) * time.Millisecond)
+	}
+	if leakKB := parseIntHeader(r, "X-Mem-Leak-KB", 0); leakKB > 0 {
+		applyMemoryLeak(leakKB)
+	}
+	if r.Header.Get("X-Degrade") == "1" {
+		n := atomic.AddInt64(&degradeCount, 1)
+		delay += degradationDelayFor(n)
+	}
+	delay += takeCold()
+
 	time.Sleep(delay)
 
 	if rand.Float64() < errorRate {
@@ -152,16 +166,44 @@ func processarHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func resetHandler(w http.ResponseWriter, r *http.Request) {
+	resetState()
+	if cold := r.URL.Query().Get("cold"); cold != "" {
+		if n, err := strconv.Atoi(cold); err == nil && n > 0 {
+			atomic.StoreInt64(&coldRemaining, int64(n))
+		}
+	}
+	logJSON("info", "Estado de simulacao resetado", nil)
+	w.WriteHeader(http.StatusOK)
+}
+
 func main() {
 	tracer.Start(
 		tracer.WithService(os.Getenv("DD_SERVICE")),
 		tracer.WithEnv(os.Getenv("DD_ENV")),
 		tracer.WithServiceVersion(os.Getenv("DD_VERSION")),
+		tracer.WithRuntimeMetrics(),
 	)
 	defer tracer.Stop()
 
+	if err := profiler.Start(
+		profiler.WithService(os.Getenv("DD_SERVICE")),
+		profiler.WithEnv(os.Getenv("DD_ENV")),
+		profiler.WithVersion(os.Getenv("DD_VERSION")),
+		profiler.WithProfileTypes(
+			profiler.CPUProfile,
+			profiler.HeapProfile,
+			profiler.GoroutineProfile,
+			profiler.MutexProfile,
+		),
+	); err != nil {
+		logJSON("error", "Falha ao iniciar profiler: "+err.Error(), nil)
+	}
+	defer profiler.Stop()
+
 	mux := httptrace.NewServeMux()
 	mux.HandleFunc("/processar", processarHandler)
+	mux.HandleFunc("/reset", resetHandler)
 
 	logJSON("info", "Worker iniciado na porta 8080", nil)
 	if err := http.ListenAndServe(":8080", mux); err != nil {
