@@ -12,6 +12,7 @@ import {
 } from './testRunner';
 import { SCENARIOS, getScenario } from './scenarios';
 import type { TestParams } from './scenarios';
+import { buscarProdutos } from './db';
 
 const app = express();
 app.use(express.json());
@@ -169,6 +170,19 @@ app.post('/comprar', async (req: Request, res: Response) => {
     const message = err instanceof Error ? err.message : 'unknown error';
     logJSON('error', 'Falha ao chamar worker', { error: message });
     res.status(500).json({ error: 'Falha no processamento' });
+  }
+});
+
+// DEMO: busca de produtos — usa SQL concatenado (alvo de SQLi na Etapa 3).
+app.get('/api/produtos/buscar', async (req: Request, res: Response) => {
+  const q = String(req.query.q ?? '');
+  try {
+    const produtos = await buscarProdutos(q);
+    res.json({ produtos });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'error';
+    logJSON('error', 'Falha na busca de produtos', { error: message, q });
+    res.status(500).json({ error: message });
   }
 });
 
