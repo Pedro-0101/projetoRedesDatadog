@@ -284,6 +284,11 @@ app.get('/api/export', (req: Request, res: Response) => {
   res.json({ rows });
 });
 
+// Config exposta à UI (ex.: link para o dashboard do Datadog).
+app.get('/api/config', (_req: Request, res: Response) => {
+  res.json({ dashboardUrl: process.env.DD_DASHBOARD_URL ?? '' });
+});
+
 // SPA fallback
 app.get('*', (_req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

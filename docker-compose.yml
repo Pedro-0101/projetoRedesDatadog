@@ -76,6 +76,7 @@ services:
       - DD_PROFILING_ENABLED=true
       - DATABASE_URL=postgres://app:app_pw@postgres:5432/vendas
       - DEMO_VULN_ENDPOINTS=true
+      - DD_DASHBOARD_URL=${DD_DASHBOARD_URL:-}
     ports:
       - "3003:3003"
     labels:
