@@ -19,6 +19,31 @@ services:
       - "8126:8126"
       - "8125:8125/udp"
 
+  postgres:
+    image: postgres:16
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+      - "-c"
+      - "pg_stat_statements.track=all"
+      - "-c"
+      - "track_activity_query_size=4096"
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app_pw
+      - POSTGRES_DB=vendas
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    labels:
+      com.datadoghq.ad.check_names: '["postgres"]'
+      com.datadoghq.ad.init_configs: '[{}]'
+      com.datadoghq.ad.instances: '[{"dbm": true, "host": "%%host%%", "port": 5432, "username": "datadog", "password": "datadog_pw"}]'
+      com.datadoghq.ad.logs: '[{"source": "postgresql", "service": "postgres-vendas"}]'
+    depends_on:
+      - datadog-agent
+
   worker:
     build: ./worker
     environment:
@@ -47,6 +72,7 @@ services:
       - DD_LOGS_INJECTION=true
       - DD_RUNTIME_METRICS_ENABLED=true
       - DD_PROFILING_ENABLED=true
+      - DATABASE_URL=postgres://app:app_pw@postgres:5432/vendas
     ports:
       - "3003:3003"
     labels:
@@ -54,3 +80,7 @@ services:
     depends_on:
       - datadog-agent
       - worker
+      - postgres
+
+volumes:
+  pgdata:
