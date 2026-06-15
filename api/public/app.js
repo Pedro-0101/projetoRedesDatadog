@@ -301,9 +301,11 @@ function setRunningState(running) {
   if (running) {
     statusDot.className  = 'w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse';
     statusText.textContent = 'Executando';
+    document.dispatchEvent(new CustomEvent('dd:run-start'));
   } else {
     statusDot.className  = 'w-2 h-2 rounded-full bg-gray-700 inline-block';
     statusText.textContent = 'Idle';
+    document.dispatchEvent(new CustomEvent('dd:run-stop'));
   }
 }
 
