@@ -2,6 +2,7 @@ import axios from 'axios';
 import StatsD from 'hot-shots';
 import tracer from './tracer';
 import { inserirVenda } from './db';
+import { behaviorHeaders } from './behavior';
 import { TestParams, TestState, getScenario } from './scenarios';
 import type { Response } from 'express';
 
@@ -122,6 +123,10 @@ async function runBatch(state: TestState, signal: AbortSignal): Promise<void> {
   const sem = new Semaphore(state.params.concurrency);
   const workerUrl = process.env.WORKER_URL ?? 'http://worker:8080';
 
+  // Reseta o estado do worker (leak/degradacao/cold) para repetibilidade.
+  const coldArg = state.params.behavior === 'cold-start' ? '?cold=15' : '';
+  await axios.post(`${workerUrl}/reset${coldArg}`).catch(() => {});
+
   broadcast('start', {
     testId: state.testId,
     total: state.total,
@@ -155,9 +160,11 @@ async function runBatch(state: TestState, signal: AbortSignal): Promise<void> {
               'X-Error-Rate': effectiveRate.toFixed(4),
               'X-Min-Delay': state.params.minDelay.toString(),
               'X-Max-Delay': state.params.maxDelay.toString(),
+              ...behaviorHeaders(state.params.behavior),
             },
             signal,
             validateStatus: () => true,
+            ...(state.params.behavior === 'timeout' ? { timeout: 2500 } : {}),
           }
         );
 
