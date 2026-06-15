@@ -17,4 +17,12 @@ describe('getScenario', () => {
       expect(typeof s.errorRate).toBe('number');
     }
   });
+
+  it('inclui os 5 cenários novos com behavior', () => {
+    expect(getScenario('memory-leak')?.behavior).toBe('mem-leak');
+    expect(getScenario('cpu-spike')?.behavior).toBe('cpu-burn');
+    expect(getScenario('degradacao-gradual')?.behavior).toBe('degrade');
+    expect(getScenario('timeout-cascata')?.behavior).toBe('timeout');
+    expect(getScenario('cold-start')?.behavior).toBe('cold-start');
+  });
 });

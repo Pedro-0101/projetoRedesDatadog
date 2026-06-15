@@ -128,6 +128,7 @@ app.post('/api/test/run', async (req: Request, res: Response) => {
         maxDelay: body.maxDelay != null ? Number(body.maxDelay) : preset.maxDelay,
         concurrency: body.concurrency != null ? Number(body.concurrency) : preset.concurrency,
         cascading: preset.cascading,
+        behavior: preset.behavior,
       };
     } else {
       params = {

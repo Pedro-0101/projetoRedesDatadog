@@ -8,6 +8,7 @@ export interface Scenario {
   maxDelay: number;
   concurrency: number;
   cascading: boolean;
+  behavior?: string;
 }
 
 export interface TestParams {
@@ -18,6 +19,7 @@ export interface TestParams {
   maxDelay: number;
   concurrency: number;
   cascading: boolean;
+  behavior?: string;
 }
 
 export interface TestState {
@@ -90,6 +92,66 @@ export const SCENARIOS: Scenario[] = [
     maxDelay: 500,
     concurrency: 10,
     cascading: true,
+  },
+  {
+    id: 'memory-leak',
+    name: 'Memory Leak',
+    description: '200 requisicoes; worker acumula memoria ate estourar',
+    count: 200,
+    errorRate: 0.0,
+    minDelay: 50,
+    maxDelay: 150,
+    concurrency: 10,
+    cascading: false,
+    behavior: 'mem-leak',
+  },
+  {
+    id: 'cpu-spike',
+    name: 'Pico de CPU',
+    description: '100 requisicoes que queimam CPU (flame graph no Profiler)',
+    count: 100,
+    errorRate: 0.0,
+    minDelay: 50,
+    maxDelay: 100,
+    concurrency: 8,
+    cascading: false,
+    behavior: 'cpu-burn',
+  },
+  {
+    id: 'degradacao-gradual',
+    name: 'Degradacao Gradual',
+    description: 'Latencia cresce a cada requisicao ao longo do teste',
+    count: 200,
+    errorRate: 0.02,
+    minDelay: 100,
+    maxDelay: 300,
+    concurrency: 5,
+    cascading: false,
+    behavior: 'degrade',
+  },
+  {
+    id: 'timeout-cascata',
+    name: 'Timeout em Cascata',
+    description: 'Worker lento + timeout curto na API => falhas em cascata',
+    count: 100,
+    errorRate: 0.0,
+    minDelay: 2000,
+    maxDelay: 5000,
+    concurrency: 20,
+    cascading: false,
+    behavior: 'timeout',
+  },
+  {
+    id: 'cold-start',
+    name: 'Cold Start',
+    description: 'Primeiras requisicoes lentas (warmup), depois normaliza',
+    count: 50,
+    errorRate: 0.0,
+    minDelay: 100,
+    maxDelay: 300,
+    concurrency: 5,
+    cascading: false,
+    behavior: 'cold-start',
   },
 ];
 
