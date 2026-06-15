@@ -13,6 +13,15 @@ import {
 } from './testRunner';
 import { SCENARIOS, getScenario } from './scenarios';
 import type { TestParams } from './scenarios';
+import {
+  ATTACKS,
+} from './attacks';
+import {
+  startAttack,
+  stopAttack,
+  registerAttackSSE,
+  unregisterAttackSSE,
+} from './attackRunner';
 import { buscarProdutos, buscarUsuario } from './db';
 
 const app = express();
@@ -186,6 +195,46 @@ app.get('/api/produtos/buscar', async (req: Request, res: Response) => {
     logJSON('error', 'Falha na busca de produtos', { error: message, q });
     res.status(500).json({ error: message });
   }
+});
+
+// Catálogo de ataques
+app.get('/api/attack/list', (_req: Request, res: Response) => {
+  res.json(ATTACKS);
+});
+
+// SSE de eventos de ataque
+app.get('/api/attack/events', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+  const clientId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  registerAttackSSE(clientId, res);
+  req.on('close', () => unregisterAttackSSE(clientId));
+});
+
+// Inicia uma simulação de ataque
+app.post('/api/attack/run', (req: Request, res: Response) => {
+  try {
+    const { attack, count, concurrency } = req.body ?? {};
+    startAttack({
+      attack: String(attack),
+      count: count != null ? Number(count) : undefined,
+      concurrency: concurrency != null ? Number(concurrency) : undefined,
+    });
+    logJSON('info', 'Ataque iniciado', { attack });
+    res.json({ status: 'started', attack });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'error';
+    res.status(409).json({ error: message });
+  }
+});
+
+// Para a simulação atual
+app.post('/api/attack/stop', (_req: Request, res: Response) => {
+  stopAttack();
+  res.json({ status: 'stopped' });
 });
 
 // DEMO: endpoints intencionalmente vulneráveis — apenas com DEMO_VULN_ENDPOINTS=true.
