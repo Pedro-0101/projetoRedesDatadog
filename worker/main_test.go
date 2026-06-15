@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -28,7 +29,7 @@ func TestColdDelayFor(t *testing.T) {
 
 func TestTakeColdDecrements(t *testing.T) {
 	resetState()
-	coldRemaining = 2
+	atomic.StoreInt64(&coldRemaining, 2)
 	if takeCold() == 0 {
 		t.Error("1ª requisição deveria ser fria")
 	}
