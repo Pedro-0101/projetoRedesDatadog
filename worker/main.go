@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	httptrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/net/http"
@@ -34,6 +36,65 @@ func logJSON(level, message string, span tracer.Span) {
 	}
 	b, _ := json.Marshal(entry)
 	fmt.Fprintln(os.Stdout, string(b))
+}
+
+// --- estado global de simulação (resetável via /reset) ---
+var (
+	leaked        [][]byte
+	leakMu        sync.Mutex
+	degradeCount  int64
+	coldRemaining int64
+)
+
+func degradationDelayFor(count int64) time.Duration {
+	d := time.Duration(count*10) * time.Millisecond
+	if d > 5*time.Second {
+		return 5 * time.Second
+	}
+	return d
+}
+
+func coldDelayFor(remaining int64) time.Duration {
+	if remaining <= 0 {
+		return 0
+	}
+	return 1500 * time.Millisecond
+}
+
+func burnCPU(d time.Duration) {
+	deadline := time.Now().Add(d)
+	x := 0
+	for time.Now().Before(deadline) {
+		x++
+		_ = x * x
+	}
+}
+
+func applyMemoryLeak(kb int) {
+	leakMu.Lock()
+	leaked = append(leaked, make([]byte, kb*1024))
+	leakMu.Unlock()
+}
+
+func resetState() {
+	leakMu.Lock()
+	leaked = nil
+	leakMu.Unlock()
+	atomic.StoreInt64(&degradeCount, 0)
+	atomic.StoreInt64(&coldRemaining, 0)
+}
+
+// takeCold decrementa coldRemaining (se > 0) e retorna o delay "frio".
+func takeCold() time.Duration {
+	for {
+		cur := atomic.LoadInt64(&coldRemaining)
+		if cur <= 0 {
+			return 0
+		}
+		if atomic.CompareAndSwapInt64(&coldRemaining, cur, cur-1) {
+			return coldDelayFor(cur)
+		}
+	}
 }
 
 func parseFloatHeader(r *http.Request, header string, fallback float64) float64 {
