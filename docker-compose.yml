@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=datadoghq.com
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    ports:
+      - "8126:8126"
+      - "8125:8125/udp"
+
+  worker:
+    build: ./worker
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_ENV=dev
+      - DD_SERVICE=worker-processamento
+      - DD_VERSION=1.0.0
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "go", "service": "worker-processamento"}]'
+    depends_on:
+      - datadog-agent
+
+  api:
+    build: ./api
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_ENV=dev
+      - DD_SERVICE=api-vendas
+      - DD_VERSION=1.0.0
+      - WORKER_URL=http://worker:8080
+    ports:
+      - "3000:3000"
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "nodejs", "service": "api-vendas"}]'
+    depends_on:
+      - datadog-agent
+      - worker

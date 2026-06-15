@@ -1,0 +1,5 @@
+.env
+worker/worker
+worker/worker.exe
+api/node_modules
+api/dist
