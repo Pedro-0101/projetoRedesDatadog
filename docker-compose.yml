@@ -46,6 +46,8 @@ services:
 
   worker:
     build: ./worker
+    mem_limit: 256m
+    restart: unless-stopped
     environment:
       - DD_AGENT_HOST=datadog-agent
       - DD_ENV=dev
