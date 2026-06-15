@@ -211,7 +211,19 @@ app.get('/api/attack/events', (req: Request, res: Response) => {
   res.flushHeaders();
   const clientId = Date.now().toString(36) + Math.random().toString(36).slice(2);
   registerAttackSSE(clientId, res);
-  req.on('close', () => unregisterAttackSSE(clientId));
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(': heartbeat\n\n');
+    } catch {
+      clearInterval(heartbeat);
+    }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unregisterAttackSSE(clientId);
+  });
 });
 
 // Inicia uma simulação de ataque
