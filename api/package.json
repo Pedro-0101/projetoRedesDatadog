@@ -11,11 +11,13 @@
     "axios": "^1.7.0",
     "dd-trace": "^5.0.0",
     "express": "^4.19.0",
-    "hot-shots": "^10.0.0"
+    "hot-shots": "^10.0.0",
+    "pg": "^8.21.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^20.14.0",
+    "@types/pg": "^8.20.0",
     "typescript": "^5.4.5",
     "vitest": "^4.1.9"
   }
