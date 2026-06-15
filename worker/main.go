@@ -60,8 +60,7 @@ func processarHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	tracer.Start(
-		tracer.WithAgentAddr(os.Getenv("DD_AGENT_HOST")+":8126"),
-		tracer.WithServiceName(os.Getenv("DD_SERVICE")),
+		tracer.WithService(os.Getenv("DD_SERVICE")),
 		tracer.WithEnv(os.Getenv("DD_ENV")),
 		tracer.WithServiceVersion(os.Getenv("DD_VERSION")),
 	)
