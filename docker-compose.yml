@@ -44,20 +44,54 @@ services:
     depends_on:
       - datadog-agent
 
-  worker:
+  worker-a:
     build: ./worker
     mem_limit: 256m
     restart: unless-stopped
     environment:
       - DD_AGENT_HOST=datadog-agent
       - DD_ENV=dev
-      - DD_SERVICE=worker-processamento
+      - DD_SERVICE=worker-a
       - DD_VERSION=1.0.0
       - DD_TRACE_SAMPLE_RATE=1
       - DD_APPSEC_ENABLED=true
       - DD_PROFILING_ENABLED=true
     labels:
-      com.datadoghq.ad.logs: '[{"source": "go", "service": "worker-processamento"}]'
+      com.datadoghq.ad.logs: '[{"source": "go", "service": "worker-a"}]'
+    depends_on:
+      - datadog-agent
+
+  worker-b:
+    build: ./worker
+    mem_limit: 256m
+    restart: unless-stopped
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_ENV=dev
+      - DD_SERVICE=worker-b
+      - DD_VERSION=1.0.0
+      - DD_TRACE_SAMPLE_RATE=1
+      - DD_APPSEC_ENABLED=true
+      - DD_PROFILING_ENABLED=true
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "go", "service": "worker-b"}]'
+    depends_on:
+      - datadog-agent
+
+  worker-c:
+    build: ./worker
+    mem_limit: 256m
+    restart: unless-stopped
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_ENV=dev
+      - DD_SERVICE=worker-c
+      - DD_VERSION=1.0.0
+      - DD_TRACE_SAMPLE_RATE=1
+      - DD_APPSEC_ENABLED=true
+      - DD_PROFILING_ENABLED=true
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "go", "service": "worker-c"}]'
     depends_on:
       - datadog-agent
 
@@ -68,7 +102,8 @@ services:
       - DD_ENV=dev
       - DD_SERVICE=api-vendas
       - DD_VERSION=1.0.0
-      - WORKER_URL=http://worker:8080
+      - SDN_WORKERS=http://worker-a:8080,http://worker-b:8080,http://worker-c:8080
+      - WORKER_URL=http://worker-a:8080
       - DD_TRACE_SAMPLE_RATE=1
       - DD_APPSEC_ENABLED=true
       - DD_LOGS_INJECTION=true
@@ -83,7 +118,9 @@ services:
       com.datadoghq.ad.logs: '[{"source": "nodejs", "service": "api-vendas"}]'
     depends_on:
       - datadog-agent
-      - worker
+      - worker-a
+      - worker-b
+      - worker-c
       - postgres
 
 volumes:

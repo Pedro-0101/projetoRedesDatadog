@@ -1,0 +1,11 @@
+{
+  "type": "metric",
+  "name": "[Demo] Disponibilidade do processamento",
+  "description": "Taxa de sucesso do processamento de vendas durante a demo.",
+  "query": {
+    "numerator": "sum:teste.sucessos{*}.as_count()",
+    "denominator": "sum:teste.sucessos{*}.as_count() + sum:teste.erros{*}.as_count()"
+  },
+  "thresholds": [ { "timeframe": "7d", "target": 95.0, "warning": 99.0 } ],
+  "tags": ["env:dev", "demo:datadog"]
+}

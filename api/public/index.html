@@ -47,6 +47,7 @@
     <button data-tab="performance" class="tab-btn active border-b-2 border-transparent px-4 py-2 text-xs uppercase tracking-widest text-gray-400">Performance</button>
     <button data-tab="ataques" class="tab-btn border-b-2 border-transparent px-4 py-2 text-xs uppercase tracking-widest text-gray-400">Ataques</button>
     <button data-tab="roteiro" class="tab-btn border-b-2 border-transparent px-4 py-2 text-xs uppercase tracking-widest text-gray-400">Roteiro</button>
+    <button data-tab="topologia" class="tab-btn border-b-2 border-transparent px-4 py-2 text-xs uppercase tracking-widest text-gray-400">Rede SDN</button>
   </nav>
 
   <!-- ===== PERFORMANCE PANEL ===== -->
@@ -98,6 +99,15 @@
       <div class="px-4 py-3 border-b border-gray-800 bg-black/10">
         <div class="flex justify-between text-xs text-gray-600 mb-1.5"><span id="progress-label">0 / 0</span><span id="progress-pct">0%</span></div>
         <div class="w-full bg-gray-900 rounded-full h-1.5"><div id="progress-bar" class="bg-dd-purple h-1.5 rounded-full" style="width:0%"></div></div>
+      </div>
+      <div class="px-4 py-2 border-b border-gray-800 bg-black/10 flex items-center gap-4 text-xs">
+        <span class="text-gray-600 uppercase tracking-widest font-bold">QoS</span>
+        <span class="text-gray-500">Gold</span><span id="qos-gold" class="text-yellow-400 font-bold">0/0</span>
+        <span class="text-gray-500">Silver</span><span id="qos-silver" class="text-gray-300 font-bold">0/0</span>
+        <span class="text-gray-500">Bronze</span><span id="qos-bronze" class="text-orange-400 font-bold">0/0</span>
+        <span class="text-gray-600">|</span>
+        <span class="text-gray-500">Throttled</span><span id="qos-throttled" class="text-red-400 font-bold">0</span>
+        <span class="text-gray-500">Dropped</span><span id="qos-dropped" class="text-red-600 font-bold">0</span>
       </div>
       <div class="flex-1 overflow-hidden flex flex-col">
         <div class="px-4 py-2 border-b border-gray-800 flex items-center justify-between bg-black/20">
@@ -151,6 +161,11 @@
       </div>
       <ol id="roteiro-steps" class="flex flex-col gap-2 text-xs"></ol>
     </div>
+  </div>
+
+  <!-- ===== TOPOLOGIA PANEL ===== -->
+  <div id="tab-topologia" class="panel" style="height: calc(100vh - 90px);">
+    <div id="topology-container" style="width:100%;height:100%;"></div>
   </div>
 
   <script src="topology.js"></script>

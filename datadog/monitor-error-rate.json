@@ -1,0 +1,8 @@
+{
+  "name": "[Demo] Taxa de erros alta",
+  "type": "metric alert",
+  "query": "sum(last_5m):sum:teste.erros{*}.as_count() > 50",
+  "message": "Muitos erros no processamento de vendas durante a demo.",
+  "tags": ["env:dev", "demo:datadog"],
+  "options": { "thresholds": { "critical": 50, "warning": 25 }, "notify_no_data": false }
+}

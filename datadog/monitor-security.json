@@ -1,0 +1,8 @@
+{
+  "name": "[Demo] Atividade de ataque detectada",
+  "type": "metric alert",
+  "query": "sum(last_5m):sum:ataque.requisicoes{*}.as_count() > 0",
+  "message": "Requisicoes de ataque detectadas (simulacao ASM).",
+  "tags": ["env:dev", "demo:datadog", "security"],
+  "options": { "thresholds": { "critical": 0 }, "notify_no_data": false }
+}
