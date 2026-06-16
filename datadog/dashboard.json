@@ -1,0 +1,136 @@
+{
+  "title": "Demo Datadog — Visao Geral",
+  "description": "Dashboard da demo com metricas de performance, SDN, QoS, Flow Rules e Traffic Shaping.",
+  "layout_type": "ordered",
+  "widgets": [
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Requisicoes: sucesso vs erro",
+        "requests": [
+          { "q": "sum:teste.sucessos{*}.as_count()", "display_type": "bars", "style": { "palette": "green" } },
+          { "q": "sum:teste.erros{*}.as_count()", "display_type": "bars", "style": { "palette": "warm" } }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Latencia p95 (ms)",
+        "requests": [ { "q": "avg:test.latencia.95percentile{*}", "display_type": "line" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Taxa de erro (%)",
+        "precision": 1,
+        "requests": [
+          {
+            "formulas": [ { "formula": "a / (a + b) * 100" } ],
+            "queries": [
+              { "name": "a", "data_source": "metrics", "query": "sum:teste.erros{*}.as_count()" },
+              { "name": "b", "data_source": "metrics", "query": "sum:teste.sucessos{*}.as_count()" }
+            ],
+            "response_format": "scalar"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Ataques por tipo",
+        "requests": [ { "q": "sum:ataque.requisicoes{*} by {attack}.as_count()", "display_type": "bars" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "SDN — Trafego por worker",
+        "requests": [ { "q": "sum:sdn.route.selected{*} by {worker}.as_count()", "display_type": "line" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "SDN — Roteamentos automaticos",
+        "requests": [ { "q": "sum:sdn.route.rerouted{*} by {from_worker}.as_count()", "display_type": "line" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "SDN — Workers bloqueados",
+        "precision": 0,
+        "requests": [ { "q": "avg:sdn.route.blocked{*}" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "QoS — Profundidade de fila por prioridade",
+        "requests": [ { "q": "avg:qos.queue.depth{*} by {priority}", "display_type": "line" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "QoS — Latencia p95 por prioridade",
+        "requests": [ { "q": "avg:qos.request.latency.95percentile{*} by {priority}", "display_type": "line" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "QoS — Requests throttled",
+        "requests": [ { "q": "sum:qos.request.throttled{*}.as_count()", "display_type": "bars" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "top_list",
+        "title": "Flow Rules — Top matches",
+        "requests": [ { "q": "top(sdn.flow_rule.matched{*}) by {rule_name}", "style": { "palette": "purple" } } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Flow Rules — Redirects por regra",
+        "requests": [ { "q": "sum:sdn.flow_rule.redirected{*} by {rule_id}.as_count()", "display_type": "line" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Flow Rules — Drops por regra",
+        "requests": [ { "q": "sum:sdn.flow_rule.dropped{*} by {rule_id}.as_count()", "display_type": "line" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Shaping — Token level por bucket",
+        "requests": [ { "q": "avg:sdn.shaping.token_level{*} by {bucket}", "display_type": "line" } ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Shaping — Throttled vs Allowed",
+        "requests": [
+          { "q": "sum:sdn.shaping.throttled{*}.as_count()", "display_type": "bars", "style": { "palette": "warm" } },
+          { "q": "sum:sdn.shaping.allowed{*}.as_count()", "display_type": "bars", "style": { "palette": "green" } }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Shaping — Wait time p95",
+        "requests": [ { "q": "avg:sdn.shaping.wait_ms.95percentile{*}", "display_type": "line" } ]
+      }
+    }
+  ]
+}

@@ -5,6 +5,8 @@ import { inserirVenda } from './db';
 import { behaviorHeaders } from './behavior';
 import { TestParams, TestState, getScenario } from './scenarios';
 import type { Response } from 'express';
+import { route as sdnRoute, getWorkerStats } from './sdnController';
+import type { Priority } from './qosController';
 
 const statsd = new StatsD({
   host: process.env.DD_AGENT_HOST || 'localhost',
@@ -56,6 +58,25 @@ function getEffectiveErrorRate(params: TestParams, index: number): number {
   const end = 0.95;
   const progress = params.count <= 1 ? 1 : index / (params.count - 1);
   return start + (end - start) * progress;
+}
+
+const PRIORITY_POOLS: Record<string, Priority[]> = {
+  'mixed': [
+    ...Array(50).fill('gold'),
+    ...Array(30).fill('silver'),
+    ...Array(20).fill('bronze'),
+  ],
+};
+
+function resolvePriority(priority: string | undefined, index: number, total: number): Priority | undefined {
+  if (!priority || priority === 'silver' || priority === 'gold' || priority === 'bronze') {
+    return priority as Priority | undefined;
+  }
+  if (priority === 'mixed') {
+    const pool = PRIORITY_POOLS['mixed'];
+    return pool[index % pool.length];
+  }
+  return undefined;
 }
 
 const sseClients = new Map<string, Response>();
@@ -121,11 +142,12 @@ export function stopTest(): void {
 
 async function runBatch(state: TestState, signal: AbortSignal): Promise<void> {
   const sem = new Semaphore(state.params.concurrency);
-  const workerUrl = process.env.WORKER_URL ?? 'http://worker:8080';
 
-  // Reseta o estado do worker (leak/degradacao/cold) para repetibilidade.
+  // Reseta todos os workers (leak/degradacao/cold) para repetibilidade.
   const coldArg = state.params.behavior === 'cold-start' ? '?cold=15' : '';
-  await axios.post(`${workerUrl}/reset${coldArg}`).catch(() => {});
+  for (const ws of getWorkerStats()) {
+    await axios.post(`${ws.url}/reset${coldArg}`).catch(() => {});
+  }
 
   broadcast('start', {
     testId: state.testId,
@@ -151,25 +173,24 @@ async function runBatch(state: TestState, signal: AbortSignal): Promise<void> {
       const effectiveRate = getEffectiveErrorRate(state.params, index);
       const t0 = Date.now();
 
+      const effectivePriority = resolvePriority(state.params.priority, index, state.total);
+
       try {
-        const response = await axios.post(
-          `${workerUrl}/processar`,
-          { teste: true, index },
+        const result = await sdnRoute(
           {
-            headers: {
-              'X-Error-Rate': effectiveRate.toFixed(4),
-              'X-Min-Delay': state.params.minDelay.toString(),
-              'X-Max-Delay': state.params.maxDelay.toString(),
-              ...behaviorHeaders(state.params.behavior),
-            },
-            signal,
-            validateStatus: () => true,
-            ...(state.params.behavior === 'timeout' ? { timeout: 2500 } : {}),
-          }
+            teste: true,
+            index,
+            errorRate: effectiveRate,
+            minDelay: state.params.minDelay,
+            maxDelay: state.params.maxDelay,
+            behavior: state.params.behavior,
+            priority: effectivePriority,
+          },
+          effectivePriority
         );
 
         const latency = Date.now() - t0;
-        const success = response.status >= 200 && response.status < 300;
+        const success = result.response.status >= 200 && result.response.status < 300;
 
         state.sent++;
         state.latencies.push(latency);
@@ -177,7 +198,6 @@ async function runBatch(state: TestState, signal: AbortSignal): Promise<void> {
         if (success) {
           state.success++;
           statsd.increment('teste.sucessos', 1, [`scenario:${state.scenarioId}`, 'env:dev']);
-          // Gera tráfego de banco correlacionado ao trace (span postgres.query).
           inserirVenda('produto-teste', 100, `cliente-${index}`).catch(() => {});
         } else {
           state.errors++;
@@ -194,7 +214,8 @@ async function runBatch(state: TestState, signal: AbortSignal): Promise<void> {
         broadcast('result', {
           testId: state.testId,
           index,
-          statusCode: response.status,
+          worker: result.worker,
+          statusCode: result.response.status,
           latency,
           success,
           timestamp: new Date().toISOString(),

@@ -9,6 +9,12 @@ export interface Scenario {
   concurrency: number;
   cascading: boolean;
   behavior?: string;
+  priority?: string;
+}
+
+export interface SdnScenarioMeta {
+  targetWorker?: string;
+  blockWorker?: string;
 }
 
 export interface TestParams {
@@ -20,6 +26,8 @@ export interface TestParams {
   concurrency: number;
   cascading: boolean;
   behavior?: string;
+  priority?: string;
+  sdn?: SdnScenarioMeta;
 }
 
 export interface TestState {
@@ -152,6 +160,121 @@ export const SCENARIOS: Scenario[] = [
     concurrency: 5,
     cascading: false,
     behavior: 'cold-start',
+  },
+  {
+    id: 'sdn-congestion',
+    name: 'SDN Congestion',
+    description: '100 reqs com cpu-burn no worker-a; SDN migra trafego automaticamente',
+    count: 100,
+    errorRate: 0.0,
+    minDelay: 50,
+    maxDelay: 100,
+    concurrency: 8,
+    cascading: false,
+    behavior: 'cpu-burn',
+  },
+  {
+    id: 'sdn-route-failure',
+    name: 'SDN Route Failure',
+    description: 'Bloqueia worker-b no meio do teste e observa failover',
+    count: 100,
+    errorRate: 0.05,
+    minDelay: 50,
+    maxDelay: 200,
+    concurrency: 10,
+    cascading: false,
+  },
+  {
+    id: 'sdn-balanced',
+    name: 'SDN Balanced',
+    description: '300 requisicoes normais distribuidas ~33% por worker',
+    count: 300,
+    errorRate: 0.05,
+    minDelay: 50,
+    maxDelay: 150,
+    concurrency: 20,
+    cascading: false,
+  },
+  {
+    id: 'sdn-recovery',
+    name: 'SDN Recovery',
+    description: 'Degrada worker-a, depois recupera e ve rebalanceamento',
+    count: 200,
+    errorRate: 0.1,
+    minDelay: 100,
+    maxDelay: 300,
+    concurrency: 8,
+    cascading: false,
+    behavior: 'degrade',
+  },
+  {
+    id: 'qos-mixed-load',
+    name: 'QoS Mixed Load',
+    description: '200 reqs — 50% gold, 30% silver, 20% bronze',
+    count: 200,
+    errorRate: 0.05,
+    minDelay: 50,
+    maxDelay: 200,
+    concurrency: 20,
+    cascading: false,
+    priority: 'mixed',
+  },
+  {
+    id: 'qos-bronze-storm',
+    name: 'QoS Bronze Storm',
+    description: '300 reqs bronze com alta concorrencia para testar throttling',
+    count: 300,
+    errorRate: 0.1,
+    minDelay: 30,
+    maxDelay: 100,
+    concurrency: 50,
+    cascading: false,
+    priority: 'bronze',
+  },
+  {
+    id: 'qos-priority-proof',
+    name: 'QoS Priority Proof',
+    description: '100 gold + 200 bronze simultaneos; gold nao deve sofrer throttling',
+    count: 300,
+    errorRate: 0.05,
+    minDelay: 50,
+    maxDelay: 150,
+    concurrency: 30,
+    cascading: false,
+    priority: 'mixed',
+  },
+  {
+    id: 'shaping-burst-off',
+    name: 'Shaping Burst OFF',
+    description: '400 req em 5s sem token bucket — latencia caotica (desative shaping antes)',
+    count: 400,
+    errorRate: 0.05,
+    minDelay: 5,
+    maxDelay: 20,
+    concurrency: 50,
+    cascading: false,
+  },
+  {
+    id: 'shaping-burst-on',
+    name: 'Shaping Burst ON',
+    description: '400 req em 5s com token bucket — throughput limitado mas suave (ative shaping antes)',
+    count: 400,
+    errorRate: 0.05,
+    minDelay: 5,
+    maxDelay: 20,
+    concurrency: 50,
+    cascading: false,
+  },
+  {
+    id: 'shaping-recovery',
+    name: 'Shaping Recovery',
+    description: 'Burst esgota o bucket, depois trafego normal — ve recuperacao dos tokens',
+    count: 500,
+    errorRate: 0.05,
+    minDelay: 10,
+    maxDelay: 100,
+    concurrency: 40,
+    cascading: false,
   },
 ];
 

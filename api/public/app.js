@@ -35,6 +35,12 @@ const valCount       = document.getElementById('val-count');
 const valError       = document.getElementById('val-error');
 const valConcurrency = document.getElementById('val-concurrency');
 
+const qosGold      = document.getElementById('qos-gold');
+const qosSilver    = document.getElementById('qos-silver');
+const qosBronze    = document.getElementById('qos-bronze');
+const qosThrottled = document.getElementById('qos-throttled');
+const qosDropped   = document.getElementById('qos-dropped');
+
 // --- Scenario loading ---
 async function loadScenarios() {
   try {
@@ -52,6 +58,9 @@ const SCENARIO_ICONS = {
   'pico-latencia':     '🟡',
   'rajada-trafego':    '⚡',
   'falha-cascata':     '🌊',
+  'qos-mixed-load':    '🏅',
+  'qos-bronze-storm':  '🥉',
+  'qos-priority-proof':'👑',
 };
 
 function renderScenarioCards(scenarios) {
@@ -256,6 +265,11 @@ function resetStats() {
   progressPct.textContent   = '0%';
   logContainer.innerHTML = '';
   logCount = 0;
+  qosGold.textContent     = '0/0';
+  qosSilver.textContent   = '0/0';
+  qosBronze.textContent   = '0/0';
+  qosThrottled.textContent = '0';
+  qosDropped.textContent   = '0';
 }
 
 // --- Log helpers ---
@@ -301,10 +315,53 @@ function setRunningState(running) {
   if (running) {
     statusDot.className  = 'w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse';
     statusText.textContent = 'Executando';
+    connectQosSSE();
+    document.dispatchEvent(new CustomEvent('dd:run-start'));
   } else {
     statusDot.className  = 'w-2 h-2 rounded-full bg-gray-700 inline-block';
     statusText.textContent = 'Idle';
+    disconnectQosSSE();
+    document.dispatchEvent(new CustomEvent('dd:run-stop'));
   }
+}
+
+// --- QoS SSE ---
+let qosEventSource = null;
+
+function connectQosSSE() {
+  if (qosEventSource) {
+    qosEventSource.close();
+    qosEventSource = null;
+  }
+
+  qosEventSource = new EventSource('/api/qos/events');
+
+  qosEventSource.addEventListener('qos', (e) => {
+    const data = JSON.parse(e.data);
+    updateQosStats(data);
+  });
+
+  qosEventSource.addEventListener('error', () => {
+    // will auto-reconnect
+  });
+}
+
+function disconnectQosSSE() {
+  if (qosEventSource) {
+    qosEventSource.close();
+    qosEventSource = null;
+  }
+}
+
+function updateQosStats(data) {
+  const g = data.queues.gold;
+  const s = data.queues.silver;
+  const b = data.queues.bronze;
+  qosGold.textContent     = `${g.slotsUsed}/${g.depth}`;
+  qosSilver.textContent   = `${s.slotsUsed}/${s.depth}`;
+  qosBronze.textContent   = `${b.slotsUsed}/${b.depth}`;
+  qosThrottled.textContent = data.totalThrottled;
+  qosDropped.textContent   = data.totalDropped;
 }
 
 // --- Wire up ---

@@ -22,4 +22,14 @@ export async function buscarProdutos(q: string): Promise<unknown[]> {
   return result.rows;
 }
 
+export async function buscarUsuario(
+  username: string
+): Promise<{ username: string; senha: string } | null> {
+  const result = await pool.query(
+    'SELECT username, senha FROM usuarios WHERE username = $1',
+    [username]
+  );
+  return result.rows[0] ?? null;
+}
+
 export { pool };

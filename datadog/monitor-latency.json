@@ -1,0 +1,8 @@
+{
+  "name": "[Demo] Latencia p95 alta",
+  "type": "metric alert",
+  "query": "avg(last_5m):avg:test.latencia.95percentile{*} > 2000",
+  "message": "Latencia p95 acima de 2s durante a demo.",
+  "tags": ["env:dev", "demo:datadog"],
+  "options": { "thresholds": { "critical": 2000, "warning": 1000 }, "notify_no_data": false }
+}

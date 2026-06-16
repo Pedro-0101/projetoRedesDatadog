@@ -192,3 +192,15 @@ docker-compose down
 | Logs | Logs > filtrar `service:api-vendas` | JSON com `dd.trace_id` preenchido |
 | Correlacao | Abrir um log > clicar "View in Trace" | Navega direto ao trace correspondente |
 | Metrica | Metrics > Explorer > `vendas.total` | Contador incrementando por requisicao |
+
+## Provisionar Datadog (dashboard, monitors, SLO)
+
+```bash
+set -a; source .env; set +a       # carrega DD_API_KEY e DD_APP_KEY
+bash scripts/datadog-setup.sh     # cria dashboard, monitors e SLO
+```
+
+Copie a Dashboard URL impressa para `DD_DASHBOARD_URL` no `.env` e reinicie a API
+(`docker compose up -d api`) para o botão "Abrir no Datadog" aparecer na UI.
+
+Roteiro de apresentação: ver [`docs/runbook-apresentacao.md`](docs/runbook-apresentacao.md).
