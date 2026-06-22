@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Datadog Demo Console</title>
+  <title>Rede SDN — Mapa em Tempo Real</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -14,164 +14,132 @@
   </script>
   <style>
     body { background: #0a0a0f; }
-    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-    .scenario-card.active { border-color: #632ca6; background: #1a1025; }
-    .tab-btn.active { color: #fff; border-color: #632ca6; }
+    .stat-value { font-variant-numeric: tabular-nums; }
     .log-entry { animation: fadeIn 0.15s ease; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-    .stat-value { font-variant-numeric: tabular-nums; }
-    #progress-bar { transition: width 0.3s ease; }
-    .pulse-dot { animation: pulse 1s infinite; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-    .panel { display: none; }
-    .panel.active { display: flex; }
+    #tp-progress-bar { transition: width 0.3s ease; }
+    /* Painel lateral colapsavel */
+    #test-panel { transition: margin-left .25s ease; }
+    #test-panel.collapsed { margin-left: -320px; }
+    /* Drawer de logs */
+    #logs-drawer { transition: transform .25s ease; transform: translateY(100%); }
+    #logs-drawer.open { transform: translateY(0); }
+    .chip.active { border-color: #632ca6; background: #1a1025; color: #fff; }
   </style>
 </head>
-<body class="text-gray-100 min-h-screen font-mono text-sm">
+<body class="text-gray-100 h-screen overflow-hidden font-mono text-sm flex flex-col">
 
   <!-- Header -->
-  <header class="border-b border-gray-800 px-6 py-3 flex items-center gap-3 bg-black/40 sticky top-0 z-10">
-    <h1 class="text-sm font-bold tracking-widest text-gray-200 uppercase">Datadog Demo Console</h1>
-    <div id="topology" class="ml-4 hidden md:flex items-center gap-2 text-xs text-gray-500"></div>
+  <header class="border-b border-gray-800 px-4 py-2.5 flex items-center gap-3 bg-black/40 shrink-0">
+    <button id="tp-toggle" title="Mostrar/ocultar painel de testes"
+            class="text-gray-400 hover:text-white w-7 h-7 rounded border border-gray-700 hover:border-gray-500">☰</button>
+    <h1 class="text-xs font-bold tracking-widest text-gray-200 uppercase">Rede SDN · Mapa em Tempo Real</h1>
     <div class="ml-auto flex items-center gap-3 text-xs text-gray-500">
       <a id="btn-datadog" href="#" target="_blank" rel="noopener"
-         class="hidden bg-dd-purple/20 border border-dd-purple/40 text-purple-200 rounded px-2 py-1 hover:bg-dd-purple/40">↗ Abrir no Datadog</a>
+         class="hidden bg-dd-purple/20 border border-dd-purple/40 text-purple-200 rounded px-2 py-1 hover:bg-dd-purple/40">↗ Datadog</a>
       <span id="status-dot" class="w-2 h-2 rounded-full bg-gray-700 inline-block"></span>
       <span id="status-text">Idle</span>
     </div>
   </header>
 
-  <!-- Tab bar -->
-  <nav class="border-b border-gray-800 px-6 flex gap-1 bg-black/20">
-    <button data-tab="performance" class="tab-btn active border-b-2 border-transparent px-4 py-2 text-xs uppercase tracking-widest text-gray-400">Performance</button>
-    <button data-tab="ataques" class="tab-btn border-b-2 border-transparent px-4 py-2 text-xs uppercase tracking-widest text-gray-400">Ataques</button>
-    <button data-tab="roteiro" class="tab-btn border-b-2 border-transparent px-4 py-2 text-xs uppercase tracking-widest text-gray-400">Roteiro</button>
-    <button data-tab="topologia" class="tab-btn border-b-2 border-transparent px-4 py-2 text-xs uppercase tracking-widest text-gray-400">Rede SDN</button>
-  </nav>
+  <!-- Corpo: painel de testes (esquerda) + mapa (direita) -->
+  <main class="flex-1 flex overflow-hidden relative">
 
-  <!-- ===== PERFORMANCE PANEL ===== -->
-  <div id="tab-performance" class="panel active" style="height: calc(100vh - 90px);">
-    <aside class="w-80 border-r border-gray-800 overflow-y-auto flex flex-col bg-black/20">
+    <!-- ===== PAINEL LATERAL DE TESTES ===== -->
+    <aside id="test-panel" class="w-80 shrink-0 border-r border-gray-800 bg-black/30 overflow-y-auto flex flex-col">
       <div class="p-4 border-b border-gray-800">
-        <div class="text-xs font-bold text-gray-600 uppercase tracking-widest mb-3">Cenarios</div>
-        <div id="scenario-cards" class="flex flex-col gap-2">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Gerador de Tráfego</div>
+        <div class="text-xs text-gray-600 leading-relaxed">Dispara requisições HTTP reais pelo sistema — pacotes reais percorrendo o mapa.</div>
+      </div>
+
+      <!-- Presets rapidos -->
+      <div class="p-4 border-b border-gray-800">
+        <div class="text-xs font-bold text-gray-600 uppercase tracking-widest mb-2">Presets</div>
+        <div id="tp-scenarios" class="flex flex-wrap gap-1.5">
           <div class="text-xs text-gray-700 animate-pulse">Carregando...</div>
         </div>
       </div>
-      <div class="p-4 flex-1 flex flex-col gap-4">
-        <div class="text-xs font-bold text-gray-600 uppercase tracking-widest">Configuracao Custom</div>
+
+      <!-- Controles custom -->
+      <div class="p-4 flex flex-col gap-4">
         <div class="flex flex-col gap-1.5">
-          <div class="flex justify-between text-xs text-gray-500"><span>Requisicoes</span><span id="val-count" class="text-gray-300 font-bold">100</span></div>
-          <input type="range" id="inp-count" min="1" max="1000" value="100" class="w-full accent-purple-600" />
+          <div class="flex justify-between text-xs text-gray-500"><span>Requisições</span><span id="tp-count-val" class="text-gray-200 font-bold">100</span></div>
+          <input type="range" id="tp-count" min="1" max="1000" value="100" class="w-full accent-purple-600" />
         </div>
         <div class="flex flex-col gap-1.5">
-          <div class="flex justify-between text-xs text-gray-500"><span>Taxa de Erro</span><span id="val-error" class="text-red-400 font-bold">10%</span></div>
-          <input type="range" id="inp-error" min="0" max="100" value="10" class="w-full accent-red-600" />
+          <div class="flex justify-between text-xs text-gray-500"><span>Taxa de Erro</span><span id="tp-error-val" class="text-red-400 font-bold">10%</span></div>
+          <input type="range" id="tp-error" min="0" max="100" value="10" class="w-full accent-red-600" />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between text-xs text-gray-500"><span>Concorrência</span><span id="tp-conc-val" class="text-blue-400 font-bold">10</span></div>
+          <input type="range" id="tp-concurrency" min="1" max="100" value="10" class="w-full accent-blue-600" />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div class="flex flex-col gap-1"><label class="text-xs text-gray-500">Delay Min (ms)</label>
-            <input type="number" id="inp-min-delay" value="100" min="0" max="30000" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs w-full text-gray-200" /></div>
+            <input type="number" id="tp-min-delay" value="100" min="0" max="30000" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs w-full text-gray-200" /></div>
           <div class="flex flex-col gap-1"><label class="text-xs text-gray-500">Delay Max (ms)</label>
-            <input type="number" id="inp-max-delay" value="1000" min="0" max="30000" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs w-full text-gray-200" /></div>
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <div class="flex justify-between text-xs text-gray-500"><span>Concorrencia</span><span id="val-concurrency" class="text-blue-400 font-bold">10</span></div>
-          <input type="range" id="inp-concurrency" min="1" max="100" value="10" class="w-full accent-blue-600" />
+            <input type="number" id="tp-max-delay" value="1000" min="0" max="30000" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs w-full text-gray-200" /></div>
         </div>
       </div>
-      <div class="p-4 border-t border-gray-800 flex flex-col gap-2">
-        <button id="btn-run" class="w-full bg-dd-purple hover:bg-purple-700 disabled:opacity-40 text-white font-bold py-2.5 px-4 rounded tracking-widest text-xs uppercase">▶ Executar Teste</button>
-        <button id="btn-stop" disabled class="w-full bg-gray-800 hover:bg-red-900 disabled:opacity-40 text-gray-400 hover:text-white font-bold py-2 px-4 rounded tracking-widest text-xs uppercase">■ Parar</button>
+
+      <!-- Stats ao vivo -->
+      <div class="px-4 pb-2">
+        <div class="grid grid-cols-3 gap-2">
+          <div class="bg-gray-900/60 rounded p-2 border border-gray-800"><div class="text-[10px] text-gray-600 uppercase">Enviadas</div><div id="tp-sent" class="stat-value text-base font-bold text-gray-200">0</div></div>
+          <div class="bg-gray-900/60 rounded p-2 border border-gray-800"><div class="text-[10px] text-gray-600 uppercase">Sucesso</div><div id="tp-success" class="stat-value text-base font-bold text-green-400">0</div></div>
+          <div class="bg-gray-900/60 rounded p-2 border border-gray-800"><div class="text-[10px] text-gray-600 uppercase">Erros</div><div id="tp-errors" class="stat-value text-base font-bold text-red-400">0</div></div>
+          <div class="bg-gray-900/60 rounded p-2 border border-gray-800"><div class="text-[10px] text-gray-600 uppercase">Em Voo</div><div id="tp-inflight" class="stat-value text-base font-bold text-yellow-400">0</div></div>
+          <div class="bg-gray-900/60 rounded p-2 border border-gray-800"><div class="text-[10px] text-gray-600 uppercase">Taxa OK</div><div id="tp-rate" class="stat-value text-base font-bold text-gray-400">—</div></div>
+          <div class="bg-gray-900/60 rounded p-2 border border-gray-800"><div class="text-[10px] text-gray-600 uppercase">Latência</div><div id="tp-latency" class="stat-value text-base font-bold text-gray-400">—</div></div>
+        </div>
+        <div class="mt-3">
+          <div class="flex justify-between text-xs text-gray-600 mb-1"><span id="tp-progress-label">0 / 0</span><span id="tp-progress-pct">0%</span></div>
+          <div class="w-full bg-gray-900 rounded-full h-1.5"><div id="tp-progress-bar" class="bg-dd-purple h-1.5 rounded-full" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Acoes -->
+      <div class="p-4 mt-auto border-t border-gray-800 flex flex-col gap-2 sticky bottom-0 bg-black/40">
+        <div class="flex gap-2">
+          <button id="tp-run" class="flex-1 bg-dd-purple hover:bg-purple-700 disabled:opacity-40 text-white font-bold py-2.5 rounded tracking-widest text-xs uppercase">▶ Executar</button>
+          <button id="tp-stop" disabled class="flex-1 bg-gray-800 hover:bg-red-900 disabled:opacity-40 text-gray-400 hover:text-white font-bold py-2.5 rounded tracking-widest text-xs uppercase">■ Parar</button>
+        </div>
+        <button id="tp-logs-toggle" class="w-full bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-300 py-2 rounded text-xs uppercase tracking-widest">📋 Expandir Logs</button>
       </div>
     </aside>
-    <div class="flex-1 flex flex-col overflow-hidden">
-      <div class="border-b border-gray-800 p-4 bg-black/10">
-        <div class="grid grid-cols-6 gap-3">
-          <div class="bg-gray-900/60 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-600 mb-1 uppercase">Enviadas</div><div id="stat-sent" class="stat-value text-xl font-bold text-gray-200">0</div></div>
-          <div class="bg-gray-900/60 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-600 mb-1 uppercase">Sucesso</div><div id="stat-success" class="stat-value text-xl font-bold text-green-400">0</div></div>
-          <div class="bg-gray-900/60 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-600 mb-1 uppercase">Erros</div><div id="stat-errors" class="stat-value text-xl font-bold text-red-400">0</div></div>
-          <div class="bg-gray-900/60 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-600 mb-1 uppercase">Em Voo</div><div id="stat-inflight" class="stat-value text-xl font-bold text-yellow-400">0</div></div>
-          <div class="bg-gray-900/60 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-600 mb-1 uppercase">Taxa OK</div><div id="stat-rate" class="stat-value text-xl font-bold text-gray-400">—</div></div>
-          <div class="bg-gray-900/60 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-600 mb-1 uppercase">Latencia</div><div id="stat-latency" class="stat-value text-xl font-bold text-gray-400">—</div></div>
+
+    <!-- ===== MAPA SDN ===== -->
+    <section class="flex-1 relative overflow-hidden">
+      <div id="topology-container" style="width:100%;height:100%;"></div>
+    </section>
+
+    <!-- ===== DRAWER DE LOGS ===== -->
+    <div id="logs-drawer" class="absolute left-0 right-0 bottom-0 h-72 bg-black/95 border-t border-gray-800 z-40 flex flex-col">
+      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-black/60">
+        <span class="text-xs font-bold text-gray-500 uppercase tracking-widest">Live Log</span>
+        <div class="flex items-center gap-3">
+          <button id="logs-clear" class="text-xs text-gray-600 hover:text-gray-300">Limpar</button>
+          <button id="logs-close" class="text-xs text-gray-500 hover:text-white">✕ Fechar</button>
         </div>
       </div>
-      <div class="px-4 py-3 border-b border-gray-800 bg-black/10">
-        <div class="flex justify-between text-xs text-gray-600 mb-1.5"><span id="progress-label">0 / 0</span><span id="progress-pct">0%</span></div>
-        <div class="w-full bg-gray-900 rounded-full h-1.5"><div id="progress-bar" class="bg-dd-purple h-1.5 rounded-full" style="width:0%"></div></div>
-      </div>
-      <div class="px-4 py-2 border-b border-gray-800 bg-black/10 flex items-center gap-4 text-xs">
-        <span class="text-gray-600 uppercase tracking-widest font-bold">QoS</span>
-        <span class="text-gray-500">Gold</span><span id="qos-gold" class="text-yellow-400 font-bold">0/0</span>
-        <span class="text-gray-500">Silver</span><span id="qos-silver" class="text-gray-300 font-bold">0/0</span>
-        <span class="text-gray-500">Bronze</span><span id="qos-bronze" class="text-orange-400 font-bold">0/0</span>
-        <span class="text-gray-600">|</span>
-        <span class="text-gray-500">Throttled</span><span id="qos-throttled" class="text-red-400 font-bold">0</span>
-        <span class="text-gray-500">Dropped</span><span id="qos-dropped" class="text-red-600 font-bold">0</span>
-      </div>
-      <div class="flex-1 overflow-hidden flex flex-col">
-        <div class="px-4 py-2 border-b border-gray-800 flex items-center justify-between bg-black/20">
-          <span class="text-xs font-bold text-gray-600 uppercase tracking-widest">Live Log</span>
-          <button id="btn-clear" class="text-xs text-gray-700 hover:text-gray-400">Limpar</button>
-        </div>
-        <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-0.5">
-          <div class="text-xs text-gray-700 italic p-2">Aguardando inicio do teste...</div>
-        </div>
+      <div id="logs-container" class="flex-1 overflow-y-auto p-3 space-y-0.5">
+        <div class="text-xs text-gray-700 italic p-2">Aguardando início do teste...</div>
       </div>
     </div>
-  </div>
+  </main>
 
-  <!-- ===== ATAQUES PANEL ===== -->
-  <div id="tab-ataques" class="panel" style="height: calc(100vh - 90px);">
-    <aside class="w-80 border-r border-gray-800 overflow-y-auto flex flex-col bg-black/20">
-      <div class="p-4 border-b border-gray-800">
-        <div class="text-xs font-bold text-gray-600 uppercase tracking-widest mb-3">Simulacoes de Ataque</div>
-        <div id="attack-cards" class="flex flex-col gap-2"><div class="text-xs text-gray-700 animate-pulse">Carregando...</div></div>
-      </div>
-      <div class="p-4 border-t border-gray-800 flex flex-col gap-2 mt-auto">
-        <button id="btn-attack-run" class="w-full bg-dd-red hover:bg-red-700 disabled:opacity-40 text-white font-bold py-2.5 px-4 rounded tracking-widest text-xs uppercase">⚠ Disparar Ataque</button>
-        <button id="btn-attack-stop" disabled class="w-full bg-gray-800 hover:bg-red-900 disabled:opacity-40 text-gray-400 hover:text-white font-bold py-2 px-4 rounded tracking-widest text-xs uppercase">■ Parar</button>
-      </div>
-    </aside>
-    <div class="flex-1 flex flex-col overflow-hidden">
-      <div class="border-b border-gray-800 p-4 bg-black/10">
-        <div class="grid grid-cols-3 gap-3">
-          <div class="bg-gray-900/60 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-600 mb-1 uppercase">Disparadas</div><div id="atk-sent" class="stat-value text-xl font-bold text-gray-200">0</div></div>
-          <div class="bg-gray-900/60 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-600 mb-1 uppercase">Bloqueadas</div><div id="atk-blocked" class="stat-value text-xl font-bold text-green-400">0</div></div>
-          <div class="bg-gray-900/60 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-600 mb-1 uppercase">Passaram</div><div id="atk-ok" class="stat-value text-xl font-bold text-red-400">0</div></div>
-        </div>
-      </div>
-      <div class="flex-1 overflow-hidden flex flex-col">
-        <div class="px-4 py-2 border-b border-gray-800 bg-black/20"><span class="text-xs font-bold text-gray-600 uppercase tracking-widest">Attack Log</span></div>
-        <div id="attack-log" class="flex-1 overflow-y-auto p-3 space-y-0.5"><div class="text-xs text-gray-700 italic p-2">Selecione um ataque e dispare...</div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== ROTEIRO PANEL ===== -->
-  <div id="tab-roteiro" class="panel flex-col" style="height: calc(100vh - 90px);">
-    <div class="max-w-3xl mx-auto w-full p-6 flex flex-col gap-4">
-      <div class="flex items-center gap-3">
-        <button id="btn-roteiro-start" class="bg-dd-purple hover:bg-purple-700 text-white font-bold py-2 px-4 rounded text-xs uppercase tracking-widest">▶ Iniciar Roteiro</button>
-        <button id="btn-roteiro-next" disabled class="bg-gray-800 disabled:opacity-40 text-gray-300 py-2 px-4 rounded text-xs uppercase tracking-widest">Proximo ▶</button>
-        <label class="flex items-center gap-2 text-xs text-gray-400 ml-2"><input type="checkbox" id="chk-auto" class="accent-purple-600" /> Auto</label>
-      </div>
-      <div id="roteiro-narration" class="bg-gray-900/60 border border-gray-800 rounded-lg p-5 text-gray-300 text-sm leading-relaxed min-h-[120px]">
-        O roteiro encadeia cenarios e um ataque, narrando o que o Datadog detecta em cada passo.
-      </div>
-      <ol id="roteiro-steps" class="flex flex-col gap-2 text-xs"></ol>
-    </div>
-  </div>
-
-  <!-- ===== TOPOLOGIA PANEL ===== -->
-  <div id="tab-topologia" class="panel" style="height: calc(100vh - 90px);">
-    <div id="topology-container" style="width:100%;height:100%;"></div>
-  </div>
-
-  <script src="topology.js"></script>
-  <script src="app.js"></script>
-  <script src="attacks.js"></script>
-  <script src="roteiro.js"></script>
-  <script src="tabs.js"></script>
+  <!-- Topologia: grafo force-directed (d3 + modulos) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="topology/data.js"></script>
+  <script src="topology/physics.js"></script>
+  <script src="topology/renderer.js"></script>
+  <script src="topology/packets.js"></script>
+  <script src="topology/panels.js"></script>
+  <script src="topology/settings.js"></script>
+  <script src="topology/main.js"></script>
+  <!-- Painel de testes (gerador de trafego real) -->
+  <script src="testpanel.js"></script>
 </body>
 </html>

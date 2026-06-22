@@ -5,10 +5,21 @@ const pool = new Pool({
   max: 10,
 });
 
-export async function inserirVenda(produto: string, valor: number, cliente: string): Promise<void> {
+export interface Coxinha {
+  sabor: string;
+  quantidade: number;
+  valor: number;
+}
+
+export async function inserirVenda(
+  produto: string,
+  valor: number,
+  cliente: string,
+  coxinhas?: Coxinha[]
+): Promise<void> {
   await pool.query(
-    'INSERT INTO vendas (produto, valor, cliente) VALUES ($1, $2, $3)',
-    [produto, valor, cliente]
+    'INSERT INTO vendas (produto, valor, cliente, coxinhas) VALUES ($1, $2, $3, $4)',
+    [produto, valor, cliente, coxinhas ? JSON.stringify(coxinhas) : '[]']
   );
 }
 

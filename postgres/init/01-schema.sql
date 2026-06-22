@@ -17,6 +17,7 @@ CREATE TABLE vendas (
   produto TEXT,
   valor NUMERIC(10,2),
   cliente TEXT,
+  coxinhas JSONB DEFAULT '[]'::jsonb,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

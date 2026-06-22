@@ -25,7 +25,7 @@ import {
 import * as qosController from './qosController';
 import * as flowRules from './flowRules';
 import * as shaping from './tokenBucket';
-import { buscarProdutos, buscarUsuario } from './db';
+import { inserirVenda, buscarProdutos, buscarUsuario, type Coxinha } from './db';
 import {
   ATTACKS,
 } from './attacks';
@@ -187,9 +187,32 @@ app.post('/comprar', async (req: Request, res: Response) => {
   statsd.increment('vendas.total', 1, ['env:dev', 'service:api-vendas']);
 
   try {
-    await axios.post(`${process.env.WORKER_URL}/processar`, req.body);
-    logJSON('info', 'Processamento confirmado pelo worker');
-    res.json({ status: 'processado' });
+    const body = req.body;
+
+    if (body.coxinhas && Array.isArray(body.coxinhas)) {
+      if (!body.coxinhas.every((c: unknown) => {
+        const item = c as Record<string, unknown>;
+        return typeof item.sabor === 'string'
+          && typeof item.quantidade === 'number'
+          && typeof item.valor === 'number';
+      })) {
+        res.status(400).json({ error: 'Coxinhas invalidas. Cada item deve ter sabor, quantidade e valor.' });
+        return;
+      }
+
+      const total = body.coxinhas.reduce((sum: number, c: Coxinha) => sum + c.quantidade * c.valor, 0);
+      const cliente = body.cliente || 'anonimo';
+
+      await axios.post(`${process.env.WORKER_URL}/processar`, body);
+      await inserirVenda('coxinha', total, cliente, body.coxinhas);
+
+      logJSON('info', 'Pedido de coxinhas processado', { cliente, total, itens: body.coxinhas.length });
+      res.json({ status: 'processado', total, itens: body.coxinhas.length });
+    } else {
+      await axios.post(`${process.env.WORKER_URL}/processar`, body);
+      logJSON('info', 'Processamento confirmado pelo worker');
+      res.json({ status: 'processado' });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unknown error';
     logJSON('error', 'Falha ao chamar worker', { error: message });

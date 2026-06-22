@@ -336,11 +336,17 @@ interface TopologyNode {
   label: string;
   type: 'client' | 'api' | 'worker' | 'db' | 'datadog';
   health: 'healthy' | 'degraded' | 'critical' | 'blocked' | 'unknown';
+  // Identidade de dispositivo. ip/mac sao sinteticos e deterministicos por id
+  // (placeholders) — substitua por dados reais de inventario se disponiveis.
+  deviceType: 'host' | 'controller' | 'worker' | 'database' | 'monitor';
+  ip: string;
+  mac: string;
   metrics: {
     rps: number;
     avgLatency: number;
     errorRate: number;
     inFlight: number;
+    activeFlows: number;
   };
 }
 
@@ -350,6 +356,13 @@ interface TopologyEdge {
   rps: number;
   blocked: boolean;
   activeRuleId?: string;
+  // Metricas de link. bandwidthMbps e capacidade nominal; utilization/latency/
+  // packetLoss sao derivados das estatisticas reais de worker quando aplicavel.
+  bandwidthMbps: number;
+  utilization: number; // 0..1
+  latencyMs: number;
+  packetLoss: number; // 0..1
+  trafficKind: 'normal' | 'anomalous' | 'control';
 }
 
 interface TopologySnapshot {
@@ -405,6 +418,68 @@ export function recordResult(workerName: string, latencyMs: number, success: boo
   trackRps(workerName);
 }
 
+const DEVICE_TYPE_BY_NODE: Record<string, TopologyNode['deviceType']> = {
+  browser: 'host',
+  api: 'controller',
+  postgres: 'database',
+  datadog: 'monitor',
+};
+
+const LINK_BANDWIDTH_MBPS = 1000;
+const LINK_RPS_CAPACITY = 40; // rps que satura o link (para derivar utilization)
+
+// Sintetiza um octeto/segmento estavel a partir do id (placeholder substituivel).
+function hashByte(id: string, salt: number): number {
+  let h = salt;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xff;
+  return h;
+}
+
+// IP/MAC deterministicos por id. PLACEHOLDER: troque por dados reais de inventario.
+function synthIp(id: string): string {
+  const subnetByType: Record<string, number> = { browser: 0, api: 1, postgres: 2, datadog: 3 };
+  const subnet = subnetByType[id] ?? 10; // workers caem em 10.0.10.x
+  return `10.0.${subnet}.${(hashByte(id, 7) % 254) + 1}`;
+}
+
+function synthMac(id: string): string {
+  const b = (s: number) => hashByte(id, s).toString(16).padStart(2, '0');
+  return `02:42:${b(1)}:${b(2)}:${b(3)}:${b(4)}`;
+}
+
+function deviceTypeFor(id: string, type: TopologyNode['type']): TopologyNode['deviceType'] {
+  if (DEVICE_TYPE_BY_NODE[id]) return DEVICE_TYPE_BY_NODE[id];
+  return type === 'worker' ? 'worker' : 'host';
+}
+
+// Constroi uma aresta enriquecida derivando metricas de link das stats reais.
+function buildEdge(
+  from: string,
+  to: string,
+  rps: number,
+  opts: { blocked?: boolean; latencyMs?: number; errorRate?: number; control?: boolean } = {}
+): TopologyEdge {
+  const blocked = opts.blocked ?? false;
+  const errorRate = opts.errorRate ?? 0;
+  const utilization = Math.min(1, rps / LINK_RPS_CAPACITY);
+  const trafficKind: TopologyEdge['trafficKind'] = opts.control
+    ? 'control'
+    : blocked || errorRate >= DEGRADED_THRESHOLD_ERROR
+    ? 'anomalous'
+    : 'normal';
+  return {
+    from,
+    to,
+    rps,
+    blocked,
+    bandwidthMbps: LINK_BANDWIDTH_MBPS,
+    utilization: parseFloat(utilization.toFixed(3)),
+    latencyMs: Math.round(opts.latencyMs ?? 0),
+    packetLoss: parseFloat(errorRate.toFixed(4)),
+    trafficKind,
+  };
+}
+
 export function getTopologySnapshot(): TopologySnapshot {
   const workerList = Array.from(workers.values());
 
@@ -412,65 +487,72 @@ export function getTopologySnapshot(): TopologySnapshot {
   const apiLatency = workerList.length > 0
     ? Math.round(workerList.reduce((sum, w) => sum + w.avgLatency, 0) / workerList.length)
     : 0;
+  const apiErrorRate = workerList.length > 0
+    ? workerList.reduce((sum, w) => sum + w.errorRate, 0) / workerList.length
+    : 0;
+
+  const mkNode = (
+    id: string,
+    label: string,
+    type: TopologyNode['type'],
+    health: TopologyNode['health'],
+    metrics: TopologyNode['metrics']
+  ): TopologyNode => ({
+    id,
+    label,
+    type,
+    health,
+    deviceType: deviceTypeFor(id, type),
+    ip: synthIp(id),
+    mac: synthMac(id),
+    metrics,
+  });
 
   const nodes: TopologyNode[] = [
-    {
-      id: 'browser',
-      label: 'Browser',
-      type: 'client',
-      health: 'healthy',
-      metrics: { rps: Math.round(apiRps), avgLatency: 0, errorRate: 0, inFlight: 0 },
-    },
-    {
-      id: 'api',
-      label: 'api-vendas',
-      type: 'api',
-      health: workerList.some((w) => calculateHealth(w) === 'critical') ? 'degraded' : 'healthy',
-      metrics: { rps: Math.round(apiRps), avgLatency: apiLatency, errorRate: 0, inFlight: 0 },
-    },
-    ...workerList.map((w) => ({
-      id: w.name,
-      label: w.name,
-      type: 'worker' as const,
-      health: calculateHealth(w),
-      metrics: {
+    mkNode('browser', 'Browser', 'client', 'healthy', {
+      rps: Math.round(apiRps), avgLatency: 0, errorRate: 0, inFlight: 0, activeFlows: 0,
+    }),
+    mkNode(
+      'api',
+      'api-vendas',
+      'api',
+      workerList.some((w) => calculateHealth(w) === 'critical') ? 'degraded' : 'healthy',
+      { rps: Math.round(apiRps), avgLatency: apiLatency, errorRate: parseFloat(apiErrorRate.toFixed(4)), inFlight: 0, activeFlows: workerList.reduce((s, w) => s + w.inFlight, 0) }
+    ),
+    ...workerList.map((w) =>
+      mkNode(w.name, w.name, 'worker', calculateHealth(w), {
         rps: Math.round(getRps(w.name)),
         avgLatency: Math.round(w.avgLatency),
         errorRate: parseFloat(w.errorRate.toFixed(4)),
         inFlight: w.inFlight,
-      },
-    })),
-    {
-      id: 'postgres',
-      label: 'PostgreSQL',
-      type: 'db',
-      health: 'healthy',
-      metrics: { rps: Math.round(apiRps), avgLatency: 0, errorRate: 0, inFlight: 0 },
-    },
-    {
-      id: 'datadog',
-      label: 'Datadog Agent',
-      type: 'datadog',
-      health: 'healthy',
-      metrics: { rps: 0, avgLatency: 0, errorRate: 0, inFlight: 0 },
-    },
+        activeFlows: w.inFlight,
+      })
+    ),
+    mkNode('postgres', 'PostgreSQL', 'db', 'healthy', {
+      rps: Math.round(apiRps), avgLatency: 0, errorRate: 0, inFlight: 0, activeFlows: 0,
+    }),
+    mkNode('datadog', 'Datadog Agent', 'datadog', 'healthy', {
+      rps: 0, avgLatency: 0, errorRate: 0, inFlight: 0, activeFlows: 0,
+    }),
   ];
 
   const edges: TopologyEdge[] = [
-    { from: 'browser', to: 'api', rps: Math.round(apiRps), blocked: false },
-    ...workerList.map((w) => ({
-      from: 'api',
-      to: w.name,
-      rps: Math.round(getRps(w.name)),
-      blocked: w.blocked,
-    })),
-    ...workerList.map((w) => ({
-      from: w.name,
-      to: 'postgres',
-      rps: Math.round(getRps(w.name)),
-      blocked: w.blocked,
-    })),
-    { from: 'postgres', to: 'datadog', rps: 0, blocked: false },
+    buildEdge('browser', 'api', Math.round(apiRps), { latencyMs: apiLatency, errorRate: apiErrorRate }),
+    ...workerList.map((w) =>
+      buildEdge('api', w.name, Math.round(getRps(w.name)), {
+        blocked: w.blocked,
+        latencyMs: w.avgLatency,
+        errorRate: w.errorRate,
+      })
+    ),
+    ...workerList.map((w) =>
+      buildEdge(w.name, 'postgres', Math.round(getRps(w.name)), {
+        blocked: w.blocked,
+        latencyMs: w.avgLatency,
+        errorRate: w.errorRate,
+      })
+    ),
+    buildEdge('postgres', 'datadog', 0, { control: true }),
   ];
 
   const allRules = flowRules.getRules();
