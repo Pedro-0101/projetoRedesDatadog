@@ -1,4 +1,5 @@
 import StatsD from 'hot-shots';
+import { baseTags } from './ddTags';
 
 export type Priority = 'gold' | 'silver' | 'bronze';
 
@@ -67,8 +68,8 @@ function broadcastStats(): void {
   }
 
   for (const p of PRIORITIES) {
-    statsd.gauge('qos.queue.depth', queues[p].length, [`priority:${p}`, 'env:dev']);
-    statsd.gauge('qos.slots.used', slotsInUse[p], [`priority:${p}`, 'env:dev']);
+    statsd.gauge('qos.queue.depth', queues[p].length, baseTags(`priority:${p}`));
+    statsd.gauge('qos.slots.used', slotsInUse[p], baseTags(`priority:${p}`));
   }
 }
 
@@ -83,12 +84,12 @@ export function acquire(priority: Priority, timeoutMs?: number): Promise<void> {
 
   if (queues[priority].length >= config.maxQueueDepth[priority]) {
     totalDropped++;
-    statsd.increment('qos.request.dropped', 1, [`priority:${priority}`, 'env:dev']);
+    statsd.increment('qos.request.dropped', 1, baseTags(`priority:${priority}`));
     return Promise.reject(new Error(`QoS queue full for ${priority}`));
   }
 
   totalThrottled++;
-  statsd.increment('qos.request.throttled', 1, [`priority:${priority}`, 'env:dev']);
+  statsd.increment('qos.request.throttled', 1, baseTags(`priority:${priority}`));
 
   return new Promise<void>((resolve, reject) => {
     const entry: QueueEntry = {
@@ -105,7 +106,7 @@ export function acquire(priority: Priority, timeoutMs?: number): Promise<void> {
           queues[priority].splice(idx, 1);
         }
         totalDropped++;
-        statsd.increment('qos.request.dropped', 1, [`priority:${priority}`, 'env:dev']);
+        statsd.increment('qos.request.dropped', 1, baseTags(`priority:${priority}`));
         reject(new Error(`QoS timeout for ${priority}`));
       }, ttl),
     };
@@ -123,7 +124,7 @@ export function release(priority: Priority): void {
     next.resolve();
   }
 
-  statsd.histogram('qos.request.latency', Date.now(), [`priority:${priority}`, 'env:dev']);
+  statsd.histogram('qos.request.latency', Date.now(), baseTags(`priority:${priority}`));
 }
 
 export function getStats(): QosStats {

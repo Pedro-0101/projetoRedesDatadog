@@ -47,6 +47,36 @@ var (
 	coldRemaining int64
 )
 
+// faultErrorRate e uma taxa de erro INTRINSECA desta instancia de worker,
+// independente do X-Error-Rate enviado por request. Serve para "envenenar" um
+// worker especifico (ex.: so o worker-a) enquanto os demais permanecem
+// saudaveis — o cenario que faz o Datadog perceber a anomalia e migrar a rota.
+//
+// PROPOSITAL: NAO e limpa por resetState()/`/reset`. O runBatch da API reseta
+// todos os workers ao iniciar cada teste; se a falha fosse limpa aqui, ela seria
+// apagada justo quando o trafego comeca. So sai via POST /fault?errorRate=0.
+var (
+	faultMu        sync.Mutex
+	faultErrorRate float64
+)
+
+func setFaultErrorRate(r float64) {
+	if r < 0 {
+		r = 0
+	} else if r > 1 {
+		r = 1
+	}
+	faultMu.Lock()
+	faultErrorRate = r
+	faultMu.Unlock()
+}
+
+func getFaultErrorRate() float64 {
+	faultMu.Lock()
+	defer faultMu.Unlock()
+	return faultErrorRate
+}
+
 func degradationDelayFor(count int64) time.Duration {
 	d := time.Duration(count*10) * time.Millisecond
 	if d > 5*time.Second {
@@ -131,6 +161,11 @@ func processarHandler(w http.ResponseWriter, r *http.Request) {
 	logJSON("info", "Iniciando processamento", processingSpan)
 
 	errorRate := parseFloatHeader(r, "X-Error-Rate", 0.20)
+	// A falha intrinseca da instancia (set via /fault) prevalece quando maior:
+	// permite degradar UM worker independentemente do trafego balanceado.
+	if fault := getFaultErrorRate(); fault > errorRate {
+		errorRate = fault
+	}
 	minDelay := parseIntHeader(r, "X-Min-Delay", 100)
 	maxDelay := parseIntHeader(r, "X-Max-Delay", 1900)
 
@@ -164,6 +199,35 @@ func processarHandler(w http.ResponseWriter, r *http.Request) {
 
 	logJSON("info", "Processamento concluido com sucesso", processingSpan)
 	w.WriteHeader(http.StatusOK)
+}
+
+// healthHandler responde a probes de heartbeat do SDN controller. Mantem o
+// worker marcado como vivo mesmo quando nao recebe trafego de /processar.
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, `{"status":"ok"}`)
+}
+
+// faultHandler ajusta a taxa de erro intrinseca da instancia.
+// POST /fault?errorRate=0.8  -> 80% das requisicoes falham nesta instancia.
+// POST /fault?errorRate=0    -> remove a falha.
+func faultHandler(w http.ResponseWriter, r *http.Request) {
+	rate := parseFloatHeader(r, "X-Error-Rate", -1)
+	if q := r.URL.Query().Get("errorRate"); q != "" {
+		if f, err := strconv.ParseFloat(q, 64); err == nil {
+			rate = f
+		}
+	}
+	if rate < 0 {
+		http.Error(w, "errorRate ausente (use ?errorRate=0..1)", http.StatusBadRequest)
+		return
+	}
+	setFaultErrorRate(rate)
+	logJSON("warn", fmt.Sprintf("Fault injection ajustada: errorRate=%.2f", getFaultErrorRate()), nil)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `{"faultErrorRate":%.4f}`+"\n", getFaultErrorRate())
 }
 
 func resetHandler(w http.ResponseWriter, r *http.Request) {
@@ -204,6 +268,8 @@ func main() {
 	mux := httptrace.NewServeMux()
 	mux.HandleFunc("/processar", processarHandler)
 	mux.HandleFunc("/reset", resetHandler)
+	mux.HandleFunc("/fault", faultHandler)
+	mux.HandleFunc("/health", healthHandler)
 
 	logJSON("info", "Worker iniciado na porta 8080", nil)
 	if err := http.ListenAndServe(":8080", mux); err != nil {

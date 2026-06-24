@@ -11,14 +11,18 @@ echo "==> Criando dashboard..."
 curl -sS -X POST "${BASE}/api/v1/dashboard" "${hdr[@]}" -d @datadog/dashboard.json \
   | sed -n 's/.*"url":"\([^"]*\)".*/    Dashboard URL: https:\/\/'"${SITE}"'\1/p'
 
-for m in error-rate latency security; do
+for m in error-rate latency security \
+         sdn-worker-degraded route-flapping all-workers-blocked \
+         qos-bronze-starvation shaping-exhausted; do
   echo "==> Criando monitor ${m}..."
   curl -sS -X POST "${BASE}/api/v1/monitor" "${hdr[@]}" -d @datadog/monitor-${m}.json \
     -o /dev/null -w "    HTTP %{http_code}\n"
 done
 
-echo "==> Criando SLO de disponibilidade..."
-curl -sS -X POST "${BASE}/api/v1/slo" "${hdr[@]}" -d @datadog/slo-availability.json \
-  -o /dev/null -w "    HTTP %{http_code}\n"
+for s in availability routing; do
+  echo "==> Criando SLO ${s}..."
+  curl -sS -X POST "${BASE}/api/v1/slo" "${hdr[@]}" -d @datadog/slo-${s}.json \
+    -o /dev/null -w "    HTTP %{http_code}\n"
+done
 
 echo "==> Concluido. Copie a Dashboard URL acima para DD_DASHBOARD_URL no .env."

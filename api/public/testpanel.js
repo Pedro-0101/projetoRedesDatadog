@@ -45,6 +45,10 @@
   const valError     = $('tp-error-val');
   const valConc      = $('tp-conc-val');
 
+  // Modo de roteamento
+  const routeBtns    = Array.from(document.querySelectorAll('.route-mode-btn'));
+  const routeHint    = $('tp-routing-hint');
+
   // Drawer de logs
   const logsDrawer   = $('logs-drawer');
   const logsToggle   = $('tp-logs-toggle');
@@ -256,6 +260,35 @@
   logsClose.addEventListener('click', () => logsDrawer.classList.remove('open'));
   logsClear.addEventListener('click', () => { logsContainer.innerHTML = ''; });
 
+  // --- Modo de roteamento ---
+  function paintRoutingMode(mode) {
+    routeBtns.forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+    if (routeHint) routeHint.textContent = mode === 'round-robin' ? 'igualitário' : 'por saúde';
+  }
+  async function loadRoutingMode() {
+    try {
+      const r = await fetch('/api/sdn/routing-mode');
+      const d = await r.json();
+      paintRoutingMode(d.mode);
+    } catch {}
+  }
+  async function setRoutingMode(mode) {
+    paintRoutingMode(mode); // otimista
+    try {
+      const r = await fetch('/api/sdn/routing-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      const d = await r.json();
+      paintRoutingMode(d.mode);
+      appendLog(`Modo de roteamento: ${d.mode}`, 'info');
+    } catch (e) {
+      appendLog(`Falha ao mudar roteamento: ${e.message}`, 'error');
+    }
+  }
+  routeBtns.forEach((b) => b.addEventListener('click', () => setRoutingMode(b.dataset.mode)));
+
   // --- Wire up ---
   btnRun.addEventListener('click', runTest);
   btnStop.addEventListener('click', stopTest);
@@ -270,4 +303,5 @@
   }).catch(() => {});
 
   loadScenarios();
+  loadRoutingMode();
 })();

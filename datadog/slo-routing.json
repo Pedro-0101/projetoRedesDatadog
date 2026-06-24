@@ -1,0 +1,11 @@
+{
+  "type": "metric",
+  "name": "[Demo SDN] Roteamento para worker saudavel",
+  "description": "Fracao das requisicoes roteadas pelo controlador SDN para o melhor worker (reason:least_latency) versus failover/round_robin.",
+  "query": {
+    "numerator": "sum:sdn.route.selected{reason:least_latency}.as_count()",
+    "denominator": "sum:sdn.route.selected{*}.as_count()"
+  },
+  "thresholds": [ { "timeframe": "7d", "target": 95.0, "warning": 99.0 } ],
+  "tags": ["env:dev", "demo:datadog", "demo:sdn"]
+}

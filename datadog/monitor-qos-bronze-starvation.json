@@ -1,0 +1,8 @@
+{
+  "name": "[Demo SDN] QoS bronze em starvation",
+  "type": "metric alert",
+  "query": "avg(last_5m):avg:qos.queue.depth{priority:bronze} > 30",
+  "message": "A fila da classe bronze esta crescendo sob congestionamento: requests de baixa prioridade estao sendo represados (esperado quando gold/silver consomem a capacidade).",
+  "tags": ["env:dev", "demo:datadog", "demo:sdn"],
+  "options": { "thresholds": { "critical": 30, "warning": 15 }, "notify_no_data": false }
+}

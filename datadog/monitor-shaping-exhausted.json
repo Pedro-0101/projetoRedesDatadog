@@ -1,0 +1,8 @@
+{
+  "name": "[Demo SDN] Token bucket esgotado",
+  "type": "metric alert",
+  "query": "min(last_5m):avg:sdn.shaping.token_level{*} by {bucket} < 0.05",
+  "message": "O token bucket de {{bucket.name}} ficou seco: o traffic shaping esta throttlando/dropando trafego para proteger o worker.",
+  "tags": ["env:dev", "demo:datadog", "demo:sdn"],
+  "options": { "thresholds": { "critical": 0.05, "warning": 0.2 }, "notify_no_data": false }
+}

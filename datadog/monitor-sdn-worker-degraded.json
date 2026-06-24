@@ -1,0 +1,8 @@
+{
+  "name": "[Demo SDN] Worker degradado",
+  "type": "metric alert",
+  "query": "avg(last_2m):avg:sdn.worker.error_rate{*} by {worker} > 0.5",
+  "message": "A taxa de erro de {{worker.name}} ultrapassou o limite. A auto-remediacao (closed-loop) ira bloquear este worker e migrar o trafego.",
+  "tags": ["env:dev", "demo:datadog", "demo:sdn"],
+  "options": { "thresholds": { "critical": 0.5, "warning": 0.25 }, "notify_no_data": false }
+}

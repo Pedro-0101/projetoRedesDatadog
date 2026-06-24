@@ -1,4 +1,5 @@
 import StatsD from 'hot-shots';
+import { baseTags } from './ddTags';
 
 const statsd = new StatsD({
   host: process.env.DD_AGENT_HOST || 'localhost',
@@ -98,7 +99,7 @@ function logJSON(level: string, message: string, extra: Record<string, unknown> 
 }
 
 function emitMetrics(bucketName: string, waitMs: number, action: 'allowed' | 'throttled' | 'dropped'): void {
-  const tags = [`bucket:${bucketName}`, 'env:dev'];
+  const tags = baseTags(`bucket:${bucketName}`);
 
   statsd.increment(`sdn.shaping.${action}`, 1, tags);
 

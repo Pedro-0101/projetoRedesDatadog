@@ -1,0 +1,8 @@
+{
+  "name": "[Demo SDN] Route flapping",
+  "type": "metric alert",
+  "query": "sum(last_5m):sum:sdn.route.rerouted{*}.as_count() > 20",
+  "message": "Excesso de reroteamentos automaticos nos ultimos 5 min: a rede SDN esta instavel (flapping).",
+  "tags": ["env:dev", "demo:datadog", "demo:sdn"],
+  "options": { "thresholds": { "critical": 20, "warning": 10 }, "notify_no_data": false }
+}

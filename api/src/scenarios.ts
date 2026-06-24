@@ -196,6 +196,20 @@ export const SCENARIOS: Scenario[] = [
     cascading: false,
   },
   {
+    id: 'sdn-datadog-reroute',
+    name: 'SDN Datadog Reroute',
+    description: 'Trafego balanceado continuo (~1h). Antes: ative round-robin e injete falha em 1 worker. O Datadog detecta e o closed-loop migra a rota. Pare manualmente no botao Parar.',
+    // Count alto de proposito: o monitor do Datadog leva ~1-2 min para disparar,
+    // entao o teste precisa durar muito mais que isso. A ~13 req/s (concurrency 6,
+    // delay 300-600ms) isto roda ~1h — nao acaba durante a demo; pare no botao Parar.
+    count: 50000,
+    errorRate: 0.05,
+    minDelay: 300,
+    maxDelay: 600,
+    concurrency: 6,
+    cascading: false,
+  },
+  {
     id: 'sdn-recovery',
     name: 'SDN Recovery',
     description: 'Degrada worker-a, depois recupera e ve rebalanceamento',

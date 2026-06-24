@@ -147,6 +147,37 @@ Sem o Agent rodando, os servicos continuam funcionando normalmente — as chamad
 
 ---
 
+## Rede SDN: plano de controle vs plano de dados
+
+A demo separa explicitamente os dois planos de uma rede SDN (na UI de topologia eles
+aparecem com cores/tracejados distintos e no campo "Plano SDN" do painel de detalhes):
+
+- **Plano de controle** — decide e observa. O nó `api-vendas` é o **controlador SDN**:
+  avalia flow rules, aplica QoS e token bucket e escolhe o worker de destino. O nó
+  `Datadog Agent` representa a observação que, no closed-loop, também *dirige* a rede.
+- **Plano de dados** — encaminha o tráfego real das requisições: `browser → api → worker → postgres`.
+
+> Nesta demo ambos os planos rodam no mesmo processo Node (o controlador está *dentro* da
+> API). A separação é conceitual/visual, não física — isto está sinalizado na UI.
+
+### Closed-loop: o Datadog dirige a rede (auto-remediação)
+
+Por padrão o Datadog apenas *observa*. Com `SDN_AUTOREMEDIATION=true`, a API passa a
+consultar (poll) o estado dos monitors `demo:sdn` via Datadog API e **age** sobre a rede:
+
+```
+worker degrada → métrica sdn.worker.error_rate sobe → monitor "[Demo SDN] Worker degradado"
+entra em Alert → a API detecta no poll → bloqueia o worker → tráfego migra → quando o
+monitor volta a OK, a API reativa o worker automaticamente.
+```
+
+Cada ação vira log (`driven_by:datadog_monitor`) e um **Datadog Event** (`tags:sdn`) que
+aparece sobreposto nos gráficos SDN do dashboard. Como o Datadog Cloud não alcança
+`localhost`, o mecanismo é poll do estado do monitor (não webhook). Requer `DD_API_KEY` e
+`DD_APP_KEY` no ambiente da API (já incluídos no `docker-compose.yml`).
+
+Controle em runtime: `GET/POST /api/sdn/autoremediation[/enable|/disable]`.
+
 ## Variaveis de ambiente relevantes
 
 | Variavel | Servico | Funcao |

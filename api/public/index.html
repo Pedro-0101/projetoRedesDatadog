@@ -27,6 +27,8 @@
     #logs-drawer { transition: transform .25s ease; transform: translateY(100%); }
     #logs-drawer.open { transform: translateY(0); }
     .chip.active { border-color: #632ca6; background: #1a1025; color: #fff; }
+    .route-mode-btn { transition: background .15s, color .15s; }
+    .route-mode-btn.active { background: #632ca6; color: #fff; }
   </style>
 </head>
 <body class="text-gray-100 h-screen overflow-hidden font-mono text-sm flex flex-col">
@@ -81,6 +83,21 @@
             <input type="number" id="tp-min-delay" value="100" min="0" max="30000" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs w-full text-gray-200" /></div>
           <div class="flex flex-col gap-1"><label class="text-xs text-gray-500">Delay Max (ms)</label>
             <input type="number" id="tp-max-delay" value="1000" min="0" max="30000" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs w-full text-gray-200" /></div>
+        </div>
+
+        <!-- Modo de roteamento do SDN Controller -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between text-xs text-gray-500">
+            <span>Modo de roteamento</span>
+            <span id="tp-routing-hint" class="text-gray-600"></span>
+          </div>
+          <div class="grid grid-cols-2 gap-1 bg-gray-900 border border-gray-700 rounded p-0.5">
+            <button id="tp-route-health" data-mode="health-score"
+              class="route-mode-btn text-xs py-1.5 rounded text-gray-400">Health-score</button>
+            <button id="tp-route-rr" data-mode="round-robin"
+              class="route-mode-btn text-xs py-1.5 rounded text-gray-400">Round-robin</button>
+          </div>
+          <div class="text-[10px] text-gray-600 leading-snug">Round-robin distribui igual e mantém o tráfego no worker ruim até o Datadog bloqueá-lo.</div>
         </div>
       </div>
 

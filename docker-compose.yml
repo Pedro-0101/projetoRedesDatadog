@@ -100,6 +100,11 @@ services:
       - DD_ENV=dev
       - DD_SERVICE=api-vendas
       - DD_VERSION=1.0.0
+      # Chaves usadas pela auto-remediacao (poll do estado dos monitors via Datadog API)
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_APP_KEY=${DD_APP_KEY:-}
+      - DD_SITE=us5.datadoghq.com
+      - SDN_AUTOREMEDIATION=${SDN_AUTOREMEDIATION:-false}
       - SDN_WORKERS=http://worker-a:8080,http://worker-b:8080,http://worker-c:8080
       - WORKER_URL=http://worker-a:8080
       - DD_TRACE_SAMPLE_RATE=1

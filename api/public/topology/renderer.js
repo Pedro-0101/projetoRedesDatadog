@@ -100,7 +100,8 @@
       .attr('stroke', (d) => EDGE_COLOR[d.data.trafficKind] || EDGE_COLOR.normal)
       .attr('stroke-width', (d) => appearance.edgeWidth * Math.max(1, Math.min(7, 1 + d.data.utilization * 6)))
       .attr('stroke-opacity', (d) => (d.data.blocked ? 0.55 : d.data.rps > 0 ? 0.8 : 0.25))
-      .attr('stroke-dasharray', (d) => (d.data.blocked ? '5,4' : null));
+      // bloqueado: tracejado curto; plano de controle: tracejado pontilhado; dados: solido
+      .attr('stroke-dasharray', (d) => (d.data.blocked ? '5,4' : d.data.plane === 'control' ? '2,5' : null));
 
     // ---- nos ----
     const nodeSel = nodesG.selectAll('g.node').data(nodes, (d) => d.id);

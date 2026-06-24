@@ -23,10 +23,16 @@
     database: 'Banco de Dados', monitor: 'Observabilidade',
   };
   const KIND_LABEL = { normal: 'Normal', anomalous: 'Anômalo', control: 'Controle' };
+  const PLANE_LABEL = { control: 'Plano de controle', data: 'Plano de dados' };
+  const PLANE_COLOR = { control: '#a855f7', data: '#38bdf8' };
 
   let panel, body;
   let selection = null; // { kind:'node'|'edge', id }
   let snapshot = null;
+  // View persistente do no selecionado. Mantem o bloco de Configuracoes (com o
+  // <select>) vivo no DOM entre snapshots: so as secoes de dados ao vivo sao
+  // reconstruidas a cada refresh, evitando que o dropdown aberto seja destruido.
+  let nodeView = null; // { id, live, config }
 
   const v = (x, suffix = '') => (x === null || x === undefined || x === '' ? '—' : x + suffix);
 
@@ -81,11 +87,33 @@
 
   function renderNode(node) {
     document.getElementById('topo-panel-title').textContent = node.label || node.id;
-    body.innerHTML = '';
+
+    // (Re)constroi a estrutura apenas quando muda o no selecionado. O bloco de
+    // Configuracoes e criado uma unica vez e permanece no DOM entre refreshes —
+    // assim o <select> nao e destruido/recriado a cada snapshot (2s), o que antes
+    // fazia o dropdown aberto "sumir" ao mexer o mouse.
+    if (!nodeView || nodeView.id !== node.id) {
+      body.innerHTML = '';
+      const live = document.createElement('div');
+      live.style.cssText = 'display:flex;flex-direction:column;gap:14px;';
+      const config = buildNodeConfig(node);
+      body.appendChild(live);
+      body.appendChild(config.el);
+      nodeView = { id: node.id, live, config };
+    }
+
+    renderNodeLive(nodeView.live, node);
+    nodeView.config.update(node);
+  }
+
+  // Reconstroi somente as secoes de dados ao vivo (sem tocar nos controles).
+  function renderNodeLive(container, node) {
+    container.innerHTML = '';
 
     const dot = HEALTH_COLOR[node.health] || '#9ca3af';
-    body.appendChild(section('Dispositivo', [
+    container.appendChild(section('Dispositivo', [
       ['Tipo', DEVICE_LABEL[node.deviceType] || node.deviceType || node.type],
+      ['Plano SDN', PLANE_LABEL[node.plane] || v(node.plane), PLANE_COLOR[node.plane]],
       ['ID', node.id],
       ['IP', v(node.ip)],
       ['MAC', v(node.mac)],
@@ -93,7 +121,7 @@
     ]));
 
     const m = node.metrics || {};
-    body.appendChild(section('Métricas', [
+    container.appendChild(section('Métricas', [
       ['Throughput (rps)', v(m.rps)],
       ['Latência média', v(m.avgLatency, ' ms')],
       ['Taxa de erro', ((m.errorRate || 0) * 100).toFixed(1) + '%'],
@@ -123,17 +151,195 @@
       row.appendChild(a); row.appendChild(b);
       wrap.appendChild(row);
     }
-    body.appendChild(wrap);
+    container.appendChild(wrap);
+  }
+
+  // Constroi o bloco de Configuracoes uma unica vez. Retorna o elemento e uma
+  // funcao update(node) que sincroniza o estado dos controles com o no atual,
+  // sem recriar o <select> (preservando interacao/foco do usuario).
+  function buildNodeConfig(node) {
+    const wrap = document.createElement('div');
+
+    const h = document.createElement('div');
+    h.style.cssText = 'color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:bold;margin-bottom:6px;';
+    h.textContent = 'Configurações';
+    wrap.appendChild(h);
+
+    // Toggle desabilitar / reativar
+    const toggle = document.createElement('button');
+    toggle.style.cssText =
+      'width:100%;background:#1f2937;border:1px solid #374151;color:#d1d5db;border-radius:5px;' +
+      'padding:7px 0;font-size:11px;cursor:pointer;margin-bottom:6px;';
+    toggle.onmouseenter = () => { if (!toggle.disabled) toggle.style.background = '#374151'; };
+    toggle.onmouseleave = () => { if (!toggle.disabled) toggle.style.background = '#1f2937'; };
+    toggle.onclick = () => {
+      const isBlocked = node.health === 'blocked';
+      const endpoint = isBlocked
+        ? '/api/sdn/nodes/' + node.id + '/enable'
+        : '/api/sdn/nodes/' + node.id + '/disable';
+      toggle.textContent = 'Aguarde…';
+      toggle.disabled = true;
+      toggle.style.opacity = '0.5';
+      fetch(endpoint, { method: 'POST' }).catch(function (err) { console.error(err); });
+    };
+    wrap.appendChild(toggle);
+
+    // Dropdown de health
+    const selWrap = document.createElement('div');
+    selWrap.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+    const selLabel = document.createElement('span');
+    selLabel.style.cssText = 'color:#9ca3af;font-size:11px;white-space:nowrap;';
+    selLabel.textContent = 'Status';
+    const sel = document.createElement('select');
+    sel.style.cssText =
+      'flex:1;background:#1f2937;border:1px solid #374151;color:#e5e7eb;border-radius:5px;' +
+      'padding:5px 6px;font-size:11px;cursor:pointer;outline:none;';
+    const opts = [
+      { value: '', label: 'Automático' },
+      { value: 'healthy', label: 'Saudável', color: '#22c55e' },
+      { value: 'degraded', label: 'Degradado', color: '#eab308' },
+      { value: 'critical', label: 'Crítico', color: '#ef4444' },
+      { value: 'blocked', label: 'Bloqueado', color: '#6b7280' },
+      { value: 'unknown', label: 'Desconhecido', color: '#9ca3af' },
+    ];
+    for (const o of opts) {
+      const el = document.createElement('option');
+      el.value = o.value;
+      el.textContent = o.label;
+      if (o.color) el.style.color = o.color;
+      sel.appendChild(el);
+    }
+    sel.value = '';
+    // Marca quando o usuario esta interagindo para o update() nao mexer no select.
+    sel.onfocus = () => { sel.dataset.active = '1'; };
+    sel.onblur = () => { delete sel.dataset.active; };
+    sel.onchange = function () {
+      if (sel.value === '') {
+        fetch('/api/sdn/nodes/' + node.id + '/reset', { method: 'POST' }).catch(console.error);
+      } else {
+        fetch('/api/sdn/nodes/' + node.id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ health: sel.value }),
+        }).catch(console.error);
+      }
+      sel.blur();
+    };
+    selWrap.appendChild(selLabel);
+    selWrap.appendChild(sel);
+    wrap.appendChild(selWrap);
+
+    // Botao reset
+    const reset = document.createElement('button');
+    reset.textContent = '↺ Restaurar padrões';
+    reset.style.cssText =
+      'width:100%;background:transparent;border:1px solid #374151;color:#6b7280;border-radius:5px;' +
+      'padding:5px 0;font-size:10px;cursor:pointer;';
+    reset.onmouseenter = () => { reset.style.color = '#d1d5db'; reset.style.borderColor = '#4b5563'; };
+    reset.onmouseleave = () => { reset.style.color = '#6b7280'; reset.style.borderColor = '#374151'; };
+    reset.onclick = function () {
+      reset.textContent = 'Aguarde…';
+      reset.disabled = true;
+      reset.style.opacity = '0.5';
+      fetch('/api/sdn/nodes/' + node.id + '/reset', { method: 'POST' })
+        .catch(console.error)
+        .finally(() => {
+          reset.textContent = '↺ Restaurar padrões';
+          reset.disabled = false;
+          reset.style.opacity = '1';
+          sel.value = '';
+        });
+    };
+    wrap.appendChild(reset);
+
+    // Injecao de falha — so para nos do tipo worker. Define uma taxa de erro
+    // intrinseca naquele worker (independente do trafego), fazendo so ele degradar
+    // para o Datadog perceber e o closed-loop migrar a rota.
+    if (node.type === 'worker') {
+      const faultWrap = document.createElement('div');
+      faultWrap.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px solid #1f2937;';
+
+      const fh = document.createElement('div');
+      fh.style.cssText = 'color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:bold;margin-bottom:6px;';
+      fh.textContent = 'Injeção de falha';
+      faultWrap.appendChild(fh);
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+      const lbl = document.createElement('span');
+      lbl.style.cssText = 'color:#9ca3af;font-size:11px;white-space:nowrap;';
+      lbl.textContent = 'Erro';
+      const range = document.createElement('input');
+      range.type = 'range';
+      range.min = '0'; range.max = '100'; range.value = '80';
+      range.style.cssText = 'flex:1;accent-color:#ef4444;';
+      const pct = document.createElement('span');
+      pct.style.cssText = 'color:#ef4444;font-size:11px;width:34px;text-align:right;';
+      pct.textContent = '80%';
+      range.oninput = () => { pct.textContent = range.value + '%'; };
+      row.appendChild(lbl); row.appendChild(range); row.appendChild(pct);
+      faultWrap.appendChild(row);
+
+      const postFault = (rate, btn, okText) => {
+        const prev = btn.textContent;
+        btn.textContent = 'Aguarde…'; btn.disabled = true; btn.style.opacity = '0.5';
+        fetch('/api/sdn/workers/' + node.id + '/fault', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ errorRate: rate }),
+        }).catch(console.error).finally(() => {
+          btn.textContent = okText || prev; btn.disabled = false; btn.style.opacity = '1';
+        });
+      };
+
+      const inject = document.createElement('button');
+      inject.textContent = '⚠ Injetar falha';
+      inject.style.cssText =
+        'width:100%;background:#3b1418;border:1px solid #7f1d1d;color:#fca5a5;border-radius:5px;' +
+        'padding:7px 0;font-size:11px;cursor:pointer;margin-bottom:6px;';
+      inject.onmouseenter = () => { if (!inject.disabled) inject.style.background = '#5b1a1f'; };
+      inject.onmouseleave = () => { if (!inject.disabled) inject.style.background = '#3b1418'; };
+      inject.onclick = () => postFault(parseInt(range.value, 10) / 100, inject, '⚠ Injetar falha');
+      faultWrap.appendChild(inject);
+
+      const clearFault = document.createElement('button');
+      clearFault.textContent = '✓ Limpar falha';
+      clearFault.style.cssText =
+        'width:100%;background:transparent;border:1px solid #374151;color:#6b7280;border-radius:5px;' +
+        'padding:5px 0;font-size:10px;cursor:pointer;';
+      clearFault.onmouseenter = () => { clearFault.style.color = '#d1d5db'; clearFault.style.borderColor = '#4b5563'; };
+      clearFault.onmouseleave = () => { clearFault.style.color = '#6b7280'; clearFault.style.borderColor = '#374151'; };
+      clearFault.onclick = () => postFault(0, clearFault, '✓ Limpar falha');
+      faultWrap.appendChild(clearFault);
+
+      wrap.appendChild(faultWrap);
+    }
+
+    function update(n) {
+      const isBlocked = n.health === 'blocked';
+      toggle.textContent = isBlocked ? '▶ Reativar nó' : '⏹ Desabilitar nó';
+      toggle.disabled = false;
+      toggle.style.opacity = '1';
+      // Nunca recriar/alterar o <select> enquanto o usuario interage com ele.
+      if (sel.dataset.active !== '1') {
+        sel.disabled = false;
+        sel.style.opacity = '1';
+      }
+    }
+
+    return { el: wrap, update };
   }
 
   function renderEdge(edge) {
     document.getElementById('topo-panel-title').textContent = edge.from + ' → ' + edge.to;
+    nodeView = null;
     body.innerHTML = '';
     const kindColor = edge.trafficKind === 'anomalous' ? '#ef4444'
       : edge.trafficKind === 'control' ? '#a855f7' : '#38bdf8';
     body.appendChild(section('Conexão', [
       ['Origem', edge.from],
       ['Destino', edge.to],
+      ['Plano SDN', PLANE_LABEL[edge.plane] || v(edge.plane), PLANE_COLOR[edge.plane]],
       ['Tipo de tráfego', KIND_LABEL[edge.trafficKind] || edge.trafficKind, kindColor],
       ['Estado', edge.blocked ? 'Bloqueado' : 'Ativo', edge.blocked ? '#ef4444' : '#22c55e'],
     ]));
@@ -147,7 +353,7 @@
   }
 
   function show() { panel.style.transform = 'translateX(0)'; }
-  function hide() { panel.style.transform = 'translateX(100%)'; selection = null; }
+  function hide() { panel.style.transform = 'translateX(100%)'; selection = null; nodeView = null; }
 
   function showNode(node, snap) {
     snapshot = snap || snapshot;

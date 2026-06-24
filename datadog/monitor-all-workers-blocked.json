@@ -1,0 +1,8 @@
+{
+  "name": "[Demo SDN] Todos os workers bloqueados",
+  "type": "metric alert",
+  "query": "sum(last_1m):sum:sdn.route.blocked{*} >= 3",
+  "message": "Todos os workers estao bloqueados: a rede SDN nao tem destino saudavel para rotear.",
+  "tags": ["env:dev", "demo:datadog", "demo:sdn"],
+  "options": { "thresholds": { "critical": 3, "warning": 2 }, "notify_no_data": false }
+}

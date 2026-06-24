@@ -48,14 +48,16 @@
       "definition": {
         "type": "timeseries",
         "title": "SDN — Trafego por worker",
-        "requests": [ { "q": "sum:sdn.route.selected{*} by {worker}.as_count()", "display_type": "line" } ]
+        "requests": [ { "q": "sum:sdn.route.selected{*} by {worker}.as_count()", "display_type": "line" } ],
+        "events": [ { "q": "tags:sdn" } ]
       }
     },
     {
       "definition": {
         "type": "timeseries",
         "title": "SDN — Roteamentos automaticos",
-        "requests": [ { "q": "sum:sdn.route.rerouted{*} by {from_worker}.as_count()", "display_type": "line" } ]
+        "requests": [ { "q": "sum:sdn.route.rerouted{*} by {from_worker}.as_count()", "display_type": "line" } ],
+        "events": [ { "q": "tags:sdn" } ]
       }
     },
     {
@@ -89,9 +91,9 @@
     },
     {
       "definition": {
-        "type": "top_list",
+        "type": "toplist",
         "title": "Flow Rules — Top matches",
-        "requests": [ { "q": "top(sdn.flow_rule.matched{*}) by {rule_name}", "style": { "palette": "purple" } } ]
+        "requests": [ { "q": "top(sum:sdn.flow_rule.matched{*} by {rule_name}.as_count(), 10, 'sum', 'desc')", "style": { "palette": "purple" } } ]
       }
     },
     {

@@ -35,6 +35,14 @@ UI de Topologia (tempo real via SSE)  [Ideia 4]
 
 ---
 
+> **Atualização (closed-loop + planos):** além das 5 ideias abaixo, a demo agora separa
+> explicitamente **plano de controle** (api = controlador SDN, Datadog = observa/dirige) e
+> **plano de dados** (browser→api→worker→postgres) — visível na topologia (campo `plane`,
+> links de controle tracejados). E fecha o ciclo: com `SDN_AUTOREMEDIATION=true` a API
+> consulta os monitors `demo:sdn` via Datadog API e bloqueia/reativa workers conforme eles
+> entram em Alert/OK, emitindo Datadog Events sobrepostos aos gráficos. Ver README → "Rede
+> SDN: plano de controle vs plano de dados".
+
 ## Ideia 1 — SDN Router com Múltiplos Workers
 
 ### Objetivo

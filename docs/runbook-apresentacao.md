@@ -38,7 +38,35 @@
 - UI → Ataques → `sql-injection`, depois `brute-force`.
 - Datadog → Security → App and API Protection: Security Signals dos ataques.
 
-### 8. Encerramento (5 min) — Modo Roteiro
+### 8. Closed-loop SDN (8 min) — Datadog dirige a rede
+- Garantir `SDN_AUTOREMEDIATION=true` no `.env` e `docker compose up -d api`.
+- Mostrar a topologia: explicar plano de controle (api/Datadog, tracejado) vs plano de dados.
+- UI → degradar um worker (cenário que sobe `sdn.worker.error_rate > 0.5`, ex.: `sdn-route-failure`).
+- Datadog → Monitors: "[Demo SDN] Worker degradado" entra em **Alert** para aquele worker.
+- Em ~15s a API bloqueia o worker sozinho: na topologia ele fica **blocked** e o tráfego migra.
+- Dashboard SDN: ver o **Event** "Auto-remediacao: ... bloqueado pelo Datadog" sobreposto ao gráfico.
+- Restaurar o worker → monitor volta a OK → a API o reativa automaticamente.
+
+#### 8b. Reroute dirigido pelo Datadog (demo "1 worker ruim") — passo a passo
+Objetivo: tráfego **igualitário** nos 3 workers até o Datadog perceber **um** worker
+com muitos erros e migrar a rota — sem a heurística local roubar a cena.
+
+1. **Pré-requisito**: `SDN_AUTOREMEDIATION=true` (a API faz poll dos monitors `demo:sdn` a cada 15s).
+2. No painel de testes, em **Modo de roteamento**, selecione **Round-robin**
+   (distribui igual e *mantém* o tráfego no worker ruim até o Datadog bloqueá-lo;
+   no modo Health-score a própria API já desviaria antes, escondendo o efeito do Datadog).
+3. No mapa, **clique no nó `worker-a`** → bloco **Injeção de falha** → deixe ~80% e
+   **⚠ Injetar falha**. (Equivale a `POST /api/sdn/workers/worker-a/fault {"errorRate":0.8}`.)
+   A falha é intrínseca do worker e **persiste** entre testes (o `/reset` do batch não a apaga).
+4. Rode o preset **SDN Datadog Reroute** (tráfego balanceado e prolongado, ~2–3 min).
+   Observe na topologia os 3 workers recebendo tráfego igual; só `worker-a` com erros/aresta anômala.
+5. Datadog: `sdn.worker.error_rate{worker:worker-a}` cruza 0.5 → monitor **"[Demo SDN] Worker degradado"** entra em **Alert** só para worker-a (lag típico de ingestão+avaliação: ~1–2 min).
+6. No próximo poll a API **bloqueia worker-a sozinha**: na topologia ele fica **blocked**,
+   o tráfego migra 100% para worker-b/c, e sai o **Datadog Event** "Auto-remediacao: worker-a bloqueado pelo Datadog" sobreposto ao gráfico.
+7. **Encerrar**: clique em worker-a → **✓ Limpar falha**. O monitor volta a OK e a API
+   reativa worker-a automaticamente. Volte o **Modo de roteamento** para **Health-score**.
+
+### 9. Encerramento (5 min) — Modo Roteiro
 - UI → Roteiro → "Iniciar Roteiro" em modo Auto: encadeia tudo enquanto você narra.
 
 ## Dicas

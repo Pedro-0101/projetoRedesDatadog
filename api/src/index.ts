@@ -21,10 +21,19 @@ import {
   getWorkerBriefs,
   getSdnEvents,
   getTopologySnapshot,
+  startHealthPolling,
+  setNodeOverride,
+  resetNodeOverride,
+  getAllNodeOverrides,
+  getRoutingMode,
+  setRoutingMode,
+  injectFault,
+  type RoutingMode,
 } from './sdnController';
 import * as qosController from './qosController';
 import * as flowRules from './flowRules';
 import * as shaping from './tokenBucket';
+import * as autoRemediation from './autoRemediation';
 import { inserirVenda, buscarProdutos, buscarUsuario, type Coxinha } from './db';
 import {
   ATTACKS,
@@ -259,6 +268,40 @@ app.post('/api/sdn/workers/:name/unblock', (req: Request, res: Response) => {
   res.json({ status: 'unblocked', worker: req.params.name });
 });
 
+// SDN Controller - get routing mode
+app.get('/api/sdn/routing-mode', (_req: Request, res: Response) => {
+  res.json({ mode: getRoutingMode() });
+});
+
+// SDN Controller - set routing mode (round-robin | health-score)
+app.post('/api/sdn/routing-mode', (req: Request, res: Response) => {
+  const mode = req.body?.mode as RoutingMode;
+  if (mode !== 'round-robin' && mode !== 'health-score') {
+    res.status(400).json({ error: "mode deve ser 'round-robin' ou 'health-score'" });
+    return;
+  }
+  const applied = setRoutingMode(mode);
+  res.json({ mode: applied });
+});
+
+// SDN Controller - inject intrinsic fault into a worker (proxy to /fault)
+app.post('/api/sdn/workers/:name/fault', async (req: Request, res: Response) => {
+  const errorRate = Number(req.body?.errorRate);
+  if (!Number.isFinite(errorRate) || errorRate < 0 || errorRate > 1) {
+    res.status(400).json({ error: 'errorRate deve ser um numero entre 0 e 1' });
+    return;
+  }
+  try {
+    const ok = await injectFault(req.params.name, errorRate);
+    if (!ok) { res.status(404).json({ error: 'Worker nao encontrado' }); return; }
+    logJSON('warn', 'Fault injection via API', { worker: req.params.name, fault_error_rate: errorRate });
+    res.json({ status: 'fault_set', worker: req.params.name, errorRate });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'error';
+    res.status(502).json({ error: `Falha ao contatar o worker: ${message}` });
+  }
+});
+
 // SSE stream for SDN events
 app.get('/api/sdn/events', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -475,6 +518,49 @@ app.get('/api/qos/events', (req: Request, res: Response) => {
   });
 });
 
+// Node overrides - list all overrides (must be before :id routes)
+app.get('/api/sdn/nodes/overrides', (_req: Request, res: Response) => {
+  res.json(getAllNodeOverrides());
+});
+
+// Node overrides - disable a node (blocks all its edges)
+app.post('/api/sdn/nodes/:id/disable', (req: Request, res: Response) => {
+  const { id } = req.params;
+  setNodeOverride(id, { disabled: true });
+  blockWorker(id);
+  logJSON('info', 'Node desabilitado via API', { node: id });
+  res.json({ status: 'disabled', node: id });
+});
+
+// Node overrides - enable a node
+app.post('/api/sdn/nodes/:id/enable', (req: Request, res: Response) => {
+  const { id } = req.params;
+  resetNodeOverride(id);
+  unblockWorker(id);
+  logJSON('info', 'Node habilitado via API', { node: id });
+  res.json({ status: 'enabled', node: id });
+});
+
+// Node overrides - update properties (health, etc.)
+app.put('/api/sdn/nodes/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { health } = req.body ?? {};
+  if (health !== undefined) {
+    setNodeOverride(id, { health });
+  }
+  logJSON('info', 'Node atualizado via API', { node: id, health });
+  res.json({ status: 'updated', node: id });
+});
+
+// Node overrides - reset to defaults
+app.post('/api/sdn/nodes/:id/reset', (req: Request, res: Response) => {
+  const { id } = req.params;
+  resetNodeOverride(id);
+  unblockWorker(id);
+  logJSON('info', 'Node resetado via API', { node: id });
+  res.json({ status: 'reset', node: id });
+});
+
 // Topology - get current snapshot
 app.get('/api/sdn/topology', (_req: Request, res: Response) => {
   res.json(getTopologySnapshot());
@@ -557,10 +643,31 @@ app.post('/api/sdn/shaping/reset', (_req: Request, res: Response) => {
   res.json({ status: 'reset' });
 });
 
+// Auto-remediacao (closed-loop dirigido pelo Datadog) - estado atual
+app.get('/api/sdn/autoremediation', (_req: Request, res: Response) => {
+  res.json(autoRemediation.getStatus());
+});
+
+// Auto-remediacao - habilitar
+app.post('/api/sdn/autoremediation/enable', (_req: Request, res: Response) => {
+  autoRemediation.enable();
+  res.json(autoRemediation.getStatus());
+});
+
+// Auto-remediacao - desabilitar
+app.post('/api/sdn/autoremediation/disable', (_req: Request, res: Response) => {
+  autoRemediation.disable();
+  res.json(autoRemediation.getStatus());
+});
+
 // SPA fallback
 app.get('*', (_req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
 const port = Number(process.env.PORT) || 3003;
-app.listen(port, () => logJSON('info', `API iniciada na porta ${port}`));
+app.listen(port, () => {
+  logJSON('info', `API iniciada na porta ${port}`);
+  startHealthPolling();
+  autoRemediation.startAutoRemediation();
+});

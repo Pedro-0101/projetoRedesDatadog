@@ -1,5 +1,6 @@
 import StatsD from 'hot-shots';
 import tracer from './tracer';
+import { baseTags } from './ddTags';
 
 export type FlowCondition =
   | { type: 'latency_above'; worker: string; thresholdMs: number }
@@ -139,14 +140,14 @@ export function evaluate(
       rule.stats.matched++;
       rule.stats.lastMatchedAt = new Date().toISOString();
 
-      statsd.increment('sdn.flow_rule.matched', 1, [`rule_id:${rule.id}`, `rule_name:${rule.name}`, 'env:dev']);
+      statsd.increment('sdn.flow_rule.matched', 1, baseTags(`rule_id:${rule.id}`, `rule_name:${rule.name}`));
 
       if (rule.action.type === 'redirect') {
-        statsd.increment('sdn.flow_rule.redirected', 1, [`rule_id:${rule.id}`, `from:current`, `to:${rule.action.toWorker}`, 'env:dev']);
+        statsd.increment('sdn.flow_rule.redirected', 1, baseTags(`rule_id:${rule.id}`, `from:current`, `to:${rule.action.toWorker}`));
       } else if (rule.action.type === 'drop') {
-        statsd.increment('sdn.flow_rule.dropped', 1, [`rule_id:${rule.id}`, 'env:dev']);
+        statsd.increment('sdn.flow_rule.dropped', 1, baseTags(`rule_id:${rule.id}`));
       } else if (rule.action.type === 'add_delay') {
-        statsd.increment('sdn.flow_rule.delayed', 1, [`rule_id:${rule.id}`, `delay_ms:${rule.action.ms}`, 'env:dev']);
+        statsd.increment('sdn.flow_rule.delayed', 1, baseTags(`rule_id:${rule.id}`, `delay_ms:${rule.action.ms}`));
       }
 
       logJSON('info', 'Flow rule matched', {
