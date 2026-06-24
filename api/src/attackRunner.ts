@@ -105,6 +105,7 @@ async function runAttack(attackId: string, total: number, concurrency: number, s
         stats: { sent: cur.sent, blocked: cur.blocked, ok: cur.ok },
       });
     } catch {
+      if (signal.aborted) return;
       cur.sent++;
       broadcast('attack-result', {
         attackId, index, status: 0, blocked: false, label: req.label,
